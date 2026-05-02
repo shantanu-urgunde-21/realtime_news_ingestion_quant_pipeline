@@ -2,7 +2,7 @@
 
 An end-to-end, high-performance microservice pipeline for real-time stock analytics, sentiment analysis, and AI-driven trading alerts.
 
-## 🚀 Quick Start
+## Quick Start
 
 The entire pipeline is containerized and orchestrated via Docker Compose.
 
