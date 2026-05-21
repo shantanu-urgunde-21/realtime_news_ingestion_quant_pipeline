@@ -1,4 +1,4 @@
-# End-Term Report: Real-Time AI Investment Decision System
+# End-Term Report: Sentinel-Stream (Real-Time Investment Decision & Alerts Engine)
 
 Recent platforms like QuantConnect, Alpaca, and Bloomberg Terminal have started using machine learning and NLP for trading insights, with frameworks like FinRL and models like ARMA, GARCH, and XGBoost becoming industry standards for predictions. However, these systems still face major challenges with real-time processing, scalability, and explainability—they mostly run in batch mode, which works for long-term predictions but fails to react quickly to rapid market movements. That's exactly why we chose Pathway: it enables us to build a truly real-time, efficient, and intelligent system that processes data as it arrives, computes incremental updates without reprocessing everything, and delivers insights fast enough to actually matter in real-world trading scenarios. *(See Appendix 1.1)*
 

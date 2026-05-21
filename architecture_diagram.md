@@ -1,8 +1,8 @@
-# Real-Time AI Investment Decision System Architecture
+# Sentinel-Stream: Real-Time Investment Decision Pipeline Architecture
 
 ```text
 =============================================================================================================
-                                REAL-TIME AI INVESTMENT DECISION PIPELINE
+                                     SENTINEL-STREAM PROTOTYPE PIPELINE
 =============================================================================================================
 
 [ DATA SOURCES ]

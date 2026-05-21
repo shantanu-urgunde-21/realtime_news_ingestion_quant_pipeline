@@ -1,6 +1,6 @@
-# Real-Time AI Investment Decision System
+# Sentinel-Stream: Rust-Accelerated Real-Time Investment Decision & Alerts Engine
 
-An end-to-end, high-performance microservice pipeline for real-time stock analytics, sentiment analysis, and AI-driven trading alerts.
+Sentinel-Stream is a production-grade, event-driven quantitative trading and alerts engine. It leverages **Pathway** for stateful sliding-window calculations (including GARCH, ARMA, RSI, and MACD), **Confluent Kafka** for real-time microservices routing, and **ClickHouse** for high-throughput analytical storage, driving dual-model **XGBoost** inference to deliver high-confidence market signals.
 
 ## Quick Start
 

@@ -1,4 +1,4 @@
-# Real Time AI Investment Decision System
+# Sentinel-Stream: Real-Time Investment Decision & Alerts Engine
 
 ## User Guide
 
