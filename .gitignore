@@ -1,1 +1,10 @@
 /docs/
+/__pycache__/
+/interiittechmeetteam11/calc_service/__pycache__/
+/interiittechmeetteam11/decision_service/__pycache__/
+/interiittechmeetteam11/news_service/__pycache__/
+/interiittechmeetteam11/stock_service/__pycache__/
+/interiittechmeetteam11/code/calc_service/__pycache__/
+/interiittechmeetteam11/code/decision_service/__pycache__/
+/interiittechmeetteam11/code/news_service/__pycache__/
+/interiittechmeetteam11/code/stock_service/__pycache__/
