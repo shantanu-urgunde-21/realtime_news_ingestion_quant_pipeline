@@ -8,6 +8,9 @@
 - Added a dedicated `publish_to_kafka` method in `NewsIngestionService` that maps bulk processed ticker results into JSON payloads containing `"symbol"`, `"weighted_avg_sentiment"`, `"news_title"`, and `"ts_ms"`, and publishes them directly to the `news_sentiment` Kafka topic.
 - Added a robust `_av_timestamp_to_ms` utility parsing method in `NewsIngestionService` supporting conversions for both Alpha Vantage `YYYYMMDDTHHMMSS` and standard SQL DateTime `YYYY-MM-DD HH:MM:SS` strings to output epoch millisecond timestamps (`ts_ms`).
 - Added a new `NewsSentimentSchema(pw.Schema)` mapping `/value/symbol`, `/value/weighted_avg_sentiment`, `/value/news_title`, and `/value/ts_ms` to `src/code/calc_service/schemas.py` to ingest streaming sentiments.
+- Added dynamic Kafka-based retry topic routing (`alert_retry`) and a dead-letter queue topic (`alert_dlq`) in `src/code/backend/main.py` to handle notification processing errors.
+- Added global broker storage/log retention configuration (`KAFKA_LOG_RETENTION_BYTES`, `KAFKA_LOG_RETENTION_HOURS`, `KAFKA_LOG_SEGMENT_BYTES`) to `docker-compose.yml` to prevent runaway disk consumption.
+- Added container-level RAM deployment resource limits to every core microservice in `docker-compose.yml` (`deploy.resources.limits.memory`) to ensure system stability and prevent WSL2 JVM memory starvation.
 
 ### Changed
 - Refactored `src/code/calc_service/main.py` to configure a real-time `pw.io.kafka.read` reader subscribing to the `news_sentiment` Kafka topic using the new `NewsSentimentSchema`.
@@ -18,6 +21,7 @@
 - Increased ClickHouse connection retry limits (`max_retries`) in `ClickHouseNewsWriter.__init__` in `src/code/news_service/main.py` from 10 to 30 attempts to accommodate slow database initialization warmup times.
 - Upgraded all `depends_on` conditions from `service_started` to `service_healthy` for the `kafka` and `clickhouse` containers in `docker-compose.yml` to guarantee safe and orderly startup boot sequencing.
 - Updated the primary database schema in `src/code/infra/schema.sql` to include `weighted_avg_sentiment Float32` and `news_title String` in the schemas for `kafka_input`, `final_table`, and the materialized view `mv_kafka_to_final`.
+- Refactored `src/code/backend/main.py` to instantiate a retry/DLQ `KafkaProducer`, subscribe the consumer to both `alert` and `alert_retry` topics simultaneously, track the dynamic `retry_count` in the alert payload and push failed events back to `alert_retry` (with a safe 1-second delay to prevent hot spinning), and route persistently failing notifications directly to `alert_dlq` on final failure.
 
 ### Removed
 - Removed the `clickhouse_driver.Client` import, environment connection parameters, `sentiment_cache` memory buffer dictionaries, `last_cache_update` timers, and the `update_sentiment_cache()` database periodic polling function from `src/code/decision_service/xgboost_mdl_inf.py`.

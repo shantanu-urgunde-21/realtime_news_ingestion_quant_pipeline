@@ -7,7 +7,7 @@ to mobile devices via Firebase Cloud Messaging (FCM).
 Input: Kafka topic 'alert' with trading alert data
 Output: Firebase Cloud Messaging notifications to subscribed users
 """
-from kafka import KafkaConsumer
+from kafka import KafkaConsumer, KafkaProducer
 import json
 import time
 from pathlib import Path
@@ -82,14 +82,14 @@ consumer = None
 for attempt in range(max_retries):
     try:
         consumer = KafkaConsumer(
-            "alert",
             bootstrap_servers=kafka_broker,
             group_id="math-group",
             auto_offset_reset="latest",
             enable_auto_commit=True,
             value_deserializer=lambda v: json.loads(v.decode("utf-8"))
         )
-        logger.info("Kafka consumer configured successfully")
+        consumer.subscribe(["alert", "alert_retry"])
+        logger.info("Kafka consumer subscribed to 'alert' and 'alert_retry' successfully")
         break
     except Exception as e:
         if attempt < max_retries - 1:
@@ -99,28 +99,81 @@ for attempt in range(max_retries):
             logger.error(f"Failed to connect to Kafka after {max_retries} attempts: {str(e)}", exc_info=True)
             raise
 
+# Producer: Send failed alerts to retry or DLQ topics
+logger.info("Configuring Kafka producer for retry and DLQ")
+producer = None
+for attempt in range(max_retries):
+    try:
+        producer = KafkaProducer(
+            bootstrap_servers=[kafka_broker],
+            value_serializer=lambda v: json.dumps(v).encode('utf-8')
+        )
+        logger.info("Kafka producer for retry/DLQ configured successfully")
+        break
+    except Exception as e:
+        if attempt < max_retries - 1:
+            logger.warning(f"Kafka not available for producer (attempt {attempt+1}/{max_retries}): {str(e)}. Retrying in {retry_delay}s...")
+            time.sleep(retry_delay)
+        else:
+            logger.error(f"Failed to connect Kafka producer after {max_retries} attempts: {str(e)}", exc_info=True)
+            raise
 # ============================================================================
 # Main Processing Loop
 # ============================================================================
 # Continuously consume alerts and send push notifications
 logger.info("Starting alert processing loop - waiting for messages...")
+
+MAX_RETRIES = 3
+
 try:
     for msg in consumer:
         data = msg.value
-        logger.info(f"Received alert message: {json.dumps(data, indent=2)}")
-        
+        topic = msg.topic
+        logger.info(f"Received message from topic '{topic}': {json.dumps(data, indent=2)}")
+        print(f"Received from '{topic}': {data.get('symbol')}")
+
         try:
             # Send push notification via Firebase Cloud Messaging
             res = send_data_message(data)
             logger.info(f"Alert notification sent successfully. Message ID: {res}")
-            print(f"Alert sent: {res}")
+            print(f"✓ Alert sent for {data.get('symbol')}: {res}")
         except Exception as e:
+            error_msg = str(e)
             logger.error(
-                f"Failed to send alert notification: {str(e)} | "
+                f"Failed to send alert notification: {error_msg} | "
                 f"Alert data: {json.dumps(data)}",
                 exc_info=True
             )
-            # Continue processing other messages even if one fails
+
+            # Retrieve and increment retry count
+            retry_count = data.get("retry_count", 0)
+            
+            if retry_count < MAX_RETRIES:
+                retry_count += 1
+                data["retry_count"] = retry_count
+                data["last_error"] = error_msg
+                
+                # Small 1-second delay only during failure handling to prevent rapid spinning hot loops
+                time.sleep(1)
+                
+                try:
+                    logger.info(f"Routing alert for {data.get('symbol')} back to retry queue (Attempt {retry_count}/{MAX_RETRIES})")
+                    producer.send("alert_retry", value=data)
+                    producer.flush()
+                    print(f"→ Routed {data.get('symbol')} to 'alert_retry' (Attempt {retry_count}/{MAX_RETRIES})")
+                except Exception as pe:
+                    logger.error(f"Failed to route message to retry topic: {str(pe)}")
+            else:
+                try:
+                    logger.warning(f"Max retries ({MAX_RETRIES}) exceeded for {data.get('symbol')}. Routing to dead letter queue ('alert_dlq').")
+                    data["final_error"] = error_msg
+                    producer.send("alert_dlq", value=data)
+                    producer.flush()
+                    print(f"☠ CRITICAL: Sent {data.get('symbol')} to 'alert_dlq'")
+                except Exception as pe:
+                    logger.error(f"Failed to route message to DLQ topic: {str(pe)}")
+
+            # Continue processing other messages
             continue
 except KeyboardInterrupt:
     logger.info("Alert processing interrupted by user")
