@@ -1,21 +1,22 @@
 """
 Calculation Service - Stock Market Technical Analysis Microservice
 
-This service performs real-time technical analysis on stock market data:
+This service performs real-time technical and sentiment analysis on stock market data:
 - GARCH volatility forecasting
 - ARMA return forecasting
 - RSI (Relative Strength Index) calculations
 - EMA (Exponential Moving Average) calculations
 - MACD (Moving Average Convergence Divergence) signal generation
 - Trading signal generation based on multiple indicators
+- Real-time temporal stream joins (LEFT asof_join) combining quotes with news sentiment
 
-Input: Kafka topic 'stock_table' with stock quote data
-Output: Kafka topic 'stock_calculation_table' with enriched technical indicators
+Input: Kafka topics 'stock_table' (quotes) and 'news_sentiment' (aggregated news sentiment)
+Output: Kafka topic 'stock_calculation_table' with enriched technical indicators and joined sentiments
 """
 
 import pathway as pw
 from config import logger, kafka_broker
-from schemas import QuoteSchema
+from schemas import QuoteSchema, NewsSentimentSchema
 from indicators import (
     calculate_all_metrics,
     rsi_with_signal,
@@ -52,6 +53,33 @@ try:
     logger.info("Successfully configured Kafka reader for topic 'stock_table'")
 except Exception as e:
     logger.error(f"Failed to configure Kafka reader: {str(e)}", exc_info=True)
+    raise
+
+# ============================================================================
+# KAFKA INPUT: Read news sentiment data from Kafka topic
+# ============================================================================
+logger.info("Reading from Kafka topic 'news_sentiment'...")
+
+try:
+    news_sentiment = pw.io.kafka.read(
+        rdkafka_settings={
+            "bootstrap.servers": kafka_broker,
+            "group.id": "pathway-news-group",
+            "auto.offset.reset": "latest",
+        },
+        topic="news_sentiment",
+        format="json",
+        schema=NewsSentimentSchema,
+        json_field_paths={
+            "symbol": "/value/symbol",
+            "weighted_avg_sentiment": "/value/weighted_avg_sentiment",
+            "news_title": "/value/news_title",
+            "ts_ms": "/value/ts_ms"
+        }
+    )
+    logger.info("Successfully configured Kafka reader for topic 'news_sentiment'")
+except Exception as e:
+    logger.error(f"Failed to configure Kafka reader for topic 'news_sentiment': {str(e)}", exc_info=True)
     raise
 
 # Prepare price tuples for temporal windowing operations
@@ -356,8 +384,17 @@ enriched_final = enriched_final.with_columns(
 )
 logger.info("MACD signal classification completed")
 
-logger.info("Preparing final output table with selected columns")
-final_table = enriched_final.select(
+logger.info("Performing real-time, stateful asof_join on symbol and ts_ms with news sentiment")
+enriched_with_sentiment = enriched_final.asof_join(
+    news_sentiment,
+    enriched_final.ts_ms,
+    news_sentiment.ts_ms,
+    enriched_final.symbol == news_sentiment.symbol,
+    how=pw.JoinMode.LEFT,
+)
+
+logger.info("Preparing final output table with selected columns including sentiment metrics")
+final_table = enriched_with_sentiment.select(
     symbol=enriched_final.symbol,
     timestamp=enriched_final.timestamp,
     ts_ms=enriched_final.ts_ms,
@@ -373,7 +410,9 @@ final_table = enriched_final.select(
     long_signal=enriched_final.long_signal,
     short_signal=enriched_final.short_signal,
     rsi_timing=enriched_final.rsi_timing,
-    pct_change=enriched_final.pct_change
+    pct_change=enriched_final.pct_change,
+    weighted_avg_sentiment=pw.coalesce(news_sentiment.weighted_avg_sentiment, 0.0),
+    news_title=pw.coalesce(news_sentiment.news_title, "No news available")
 )
 
 # ============================================================================

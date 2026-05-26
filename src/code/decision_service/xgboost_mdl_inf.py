@@ -11,7 +11,6 @@ Output: Kafka topic 'alert' with trading alerts (when conditions are met)
 import json
 import time
 from kafka import KafkaConsumer, KafkaProducer
-from clickhouse_driver import Client
 import xgboost as xgb
 import numpy as np
 import pickle
@@ -74,37 +73,7 @@ except Exception as e:
     logger.error(f"Failed to load classifier model: {str(e)}", exc_info=True)
     raise
 
-# ============================================================================
-# ClickHouse Connection
-# ============================================================================
-logger.info("Connecting to ClickHouse database")
-try:
-    ch_host = os.getenv("CLICKHOUSE_HOST", "localhost")
-    ch_port = int(os.getenv("CLICKHOUSE_PORT", 9000))
-    ch_password = os.getenv("CLICKHOUSE_PASSWORD", "")
-    
-    # Retry logic for ClickHouse connection
-    max_retries = 30
-    retry_delay = 2
-    client = None
-    
-    for attempt in range(max_retries):
-        try:
-            client = Client(host=ch_host, port=ch_port, password=ch_password)
-            # Test connection
-            client.execute("SELECT 1")
-            logger.info("Connected to ClickHouse successfully")
-            break
-        except Exception as e:
-            if attempt < max_retries - 1:
-                logger.warning(f"Failed to connect to ClickHouse (attempt {attempt+1}/{max_retries}): {str(e)}. Retrying in {retry_delay}s...")
-                time.sleep(retry_delay)
-            else:
-                logger.error(f"Failed to connect to ClickHouse after {max_retries} attempts: {str(e)}", exc_info=True)
-                raise
-except Exception as e:
-    logger.error(f"Configuration error or persistent connection failure: {str(e)}", exc_info=True)
-    raise
+# ClickHouse Connection removed for stateless inference decoupling
 
 # ============================================================================
 # Symbol Mapping
@@ -180,33 +149,6 @@ print("Waiting for messages...")
 # Continuously consume stock calculation data, make predictions, and send alerts
 logger.info("Starting main processing loop")
 
-# Initialize in-memory cache for news sentiment
-sentiment_cache = {}
-last_cache_update = 0
-CACHE_TTL = 300  # 5 minutes
-
-def update_sentiment_cache():
-    global sentiment_cache, last_cache_update
-    try:
-        query_all_news = """
-            SELECT symbol, news_titles, weighted_avg_sentiment 
-            FROM market_data.sentiment_stream 
-            WHERE cycle = (SELECT MAX(cycle) FROM market_data.sentiment_stream)
-        """
-        data_news = client.execute(query_all_news)
-        
-        new_cache = {}
-        for row in data_news:
-            symbol, titles, sentiment = row[0], row[1], float(row[2])
-            new_cache[symbol] = (sentiment, str(titles))
-        
-        sentiment_cache = new_cache
-        last_cache_update = time.time()
-        logger.info(f"Updated sentiment cache with {len(sentiment_cache)} symbols")
-    except Exception as e:
-        logger.error(f"Failed to update sentiment cache: {str(e)}", exc_info=True)
-
-
 try:
     for msg in consumer:
         data = msg.value
@@ -230,22 +172,11 @@ try:
             continue
 
         # ====================================================================
-        # Fetch News Sentiment Data from Cache
+        # Fetch News Sentiment Data directly from Kafka Payload
         # ====================================================================
-        # Periodically update the cache
-        if time.time() - last_cache_update > CACHE_TTL:
-            update_sentiment_cache()
-
-        # Get sentiment from cache (or use neutral if not found)
-        cache_entry = sentiment_cache.get(current_symbol)
-        
-        if cache_entry is None:
-            logger.debug(f"No news data found for {current_symbol}, using sentiment=0")
-            weighted_sentiment = 0.0
-            news_titles = "No news available"
-        else:
-            weighted_sentiment, news_titles = cache_entry
-            logger.debug(f"Retrieved sentiment {weighted_sentiment:.4f} for {current_symbol}")
+        weighted_sentiment = float(data.get("weighted_avg_sentiment", 0.0))
+        news_titles = data.get("news_title", "No news available")
+        logger.debug(f"Retrieved streaming sentiment {weighted_sentiment:.4f} for {current_symbol}")
 
         # ====================================================================
         # Feature Engineering

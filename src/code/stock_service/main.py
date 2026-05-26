@@ -74,16 +74,17 @@ if not Path(csv_file).exists():
     logger.error(f"CSV file not found: {csv_file}")
     raise FileNotFoundError(f"CSV file not found: {csv_file}")
 
-logger.info(f"Reading historical data from {csv_file}")
-logger.info("Replay configuration: speedup=30.0 (30x faster than real-time)")
-
 try:
+    replay_speedup = float(os.getenv("REPLAY_SPEEDUP", "5.0"))
+    logger.info(f"Replay configuration: speedup={replay_speedup}x (default is 5.0x)")
+    print(f"Replay configuration: speedup={replay_speedup}x")
+    
     quotes = pw.demo.replay_csv_with_time(
         path=csv_file,
         schema=InputSchema,
         time_column="ts_ms",  # Column used for temporal ordering
         unit="ms",  # Time unit: milliseconds
-        speedup=30.0  # Replay speed multiplier (30x faster)
+        speedup=replay_speedup  # Replay speed multiplier
     )
     logger.info("Historical data replay configured successfully")
 except Exception as e:

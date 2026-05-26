@@ -3,11 +3,11 @@ News Service - Financial News Ingestion and Sentiment Analysis Microservice
 
 This service fetches financial news from Alpha Vantage API, performs sentiment
 analysis, aggregates news by stock ticker, and publishes results to Kafka and
-ClickHouse. It dynamically adjusts date ranges based on timestamps from the
-stock service.
+ClickHouse. It dynamically synchronizes its date ranges by querying ClickHouse
+for the latest processed market data timestamp.
 
-Input: Alpha Vantage News API, Kafka topic 'stock_timestamp' for date ranges
-Output: Kafka topic 'News' with aggregated sentiment data, ClickHouse database
+Input: Alpha Vantage News API, ClickHouse market_data.final_table for timestamp sync
+Output: Kafka topic 'news_sentiment' with aggregated sentiment data, ClickHouse database (sentiment_stream)
 """
 import json
 import time
@@ -19,6 +19,7 @@ from threading import Thread, Lock
 import os
 from pathlib import Path
 import logging
+from kafka import KafkaProducer
 
 # Load environment variables
 load_dotenv()
@@ -104,7 +105,7 @@ class ClickHouseNewsWriter:
             raise ValueError("CLICKHOUSE_URL environment variable is required")
         
         # Test connection to ClickHouse with retry logic
-        max_retries = 10
+        max_retries = 30
         retry_delay = 3  # seconds
         
         logger.info(f"Testing ClickHouse connection: {self.url}")
@@ -227,10 +228,95 @@ class NewsIngestionService:
         """Initialize news ingestion service with dependencies."""
         self.hash_set = set()  # Track processed news items to avoid duplicates
         self.ch = ClickHouseNewsWriter()
+        
+        # Initialize Kafka Producer with retries
+        self.kafka_broker = os.getenv("KAFKA_BROKER", "localhost:9092")
+        logger.info(f"Initializing Kafka producer connecting to: {self.kafka_broker}")
+        
+        max_retries = 15
+        retry_delay = 2
+        self.producer = None
+        for attempt in range(max_retries):
+            try:
+                self.producer = KafkaProducer(
+                    bootstrap_servers=[self.kafka_broker],
+                    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+                )
+                logger.info("Kafka producer established successfully")
+                print("Kafka producer established successfully")
+                break
+            except Exception as e:
+                logger.warning(f"Kafka producer connection attempt {attempt + 1}/{max_retries} failed: {str(e)}")
+                print(f"Kafka producer connection attempt {attempt + 1}/{max_retries} failed, retrying in {retry_delay}s...")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                else:
+                    logger.error(f"Failed to connect to Kafka producer: {str(e)}", exc_info=True)
+                    print("ERROR: Failed to connect to Kafka producer")
+                    
         logger.info("NewsIngestionService initialized")
 
     def _hash(self, title: str, url: str) -> str:
         return hashlib.sha256(f"{title}{url}".encode()).hexdigest()
+
+    def _av_timestamp_to_ms(self, ts_str: str) -> int:
+        """Convert Alpha Vantage timestamp (e.g. YYYYMMDDTHHMMSS or YYYY-MM-DD HH:MM:SS) to ms."""
+        try:
+            ts_str = ts_str.strip()
+            if 'T' in ts_str:
+                parts = ts_str.split('T')
+                date_part = parts[0]
+                time_part = parts[1]
+                if len(date_part) == 8 and len(time_part) >= 4:
+                    if len(time_part) == 4:
+                        time_part += "00"
+                    dt = datetime.strptime(f"{date_part}T{time_part[:6]}", "%Y%m%dT%H%M%S")
+                    return int(dt.timestamp() * 1000)
+            elif '-' in ts_str:
+                dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+                return int(dt.timestamp() * 1000)
+            return int(datetime.now().timestamp() * 1000)
+        except Exception as e:
+            logger.warning(f"Error parsing timestamp '{ts_str}': {e}. Using current time.")
+            return int(datetime.now().timestamp() * 1000)
+
+    def publish_to_kafka(self, all_ticker_news: dict, cycle: int):
+        """Publish aggregated news sentiment data to Kafka topic 'news_sentiment'."""
+        if not self.producer:
+            logger.warning("Kafka producer not initialized, skipping publish")
+            return
+            
+        published_count = 0
+        for ticker, news_data in all_ticker_news.items():
+            max_ts_ms = 0
+            for ts in news_data["timestamps"]:
+                ms = self._av_timestamp_to_ms(ts)
+                if ms > max_ts_ms:
+                    max_ts_ms = ms
+            if max_ts_ms == 0:
+                max_ts_ms = int(datetime.now().timestamp() * 1000)
+                
+            news_title = str(news_data["titles"])
+            
+            payload = {
+                "symbol": ticker,
+                "weighted_avg_sentiment": float(news_data["weighted_avg_sentiment"]),
+                "news_title": news_title,
+                "ts_ms": max_ts_ms
+            }
+            
+            try:
+                self.producer.send("news_sentiment", value=payload)
+                published_count += 1
+            except Exception as e:
+                logger.error(f"Failed to publish Kafka sentiment message for {ticker}: {str(e)}")
+                
+        try:
+            self.producer.flush()
+            logger.info(f"Published {published_count} news sentiment records to Kafka topic 'news_sentiment' (cycle {cycle})")
+            print(f"✓ Published {published_count} records to Kafka topic 'news_sentiment'")
+        except Exception as e:
+            logger.error(f"Failed to flush Kafka producer: {str(e)}")
 
     def fetch_by_topic(self, topic: str, start_date: str, end_date: str):
         """
@@ -509,17 +595,18 @@ class NewsIngestionService:
                 published_count = len(all_ticker_news)
                 if published_count > 0:
                     self.ch.bulk_insert(all_ticker_news, cycle)
+                    self.publish_to_kafka(all_ticker_news, cycle)
 
                 print(f"\n{'=' * 60}")
                 print(f"Cycle {cycle} complete - Published {published_count} tickers")
-                print(f"Next cycle in 2 hours...")
+                print(f"Next cycle in 60 seconds...")
                 print(f"{'=' * 60}\n")
                 
                 logging.info(f"\n{'=' * 60}")
                 logging.info(f"Cycle {cycle} complete - Published {published_count} tickers")
-                logging.info(f"Next cycle in 2 hours...")
+                logging.info(f"Next cycle in 60 seconds...")
                 logging.info(f"{'=' * 60}\n")
-                time.sleep(7200)
+                time.sleep(60)
 
         except KeyboardInterrupt:
             logger.info("Service interrupted by user (KeyboardInterrupt)")

@@ -22,3 +22,14 @@ class QuoteSchema(pw.Schema):
     close: float
     volume: int
     ts_ms: int
+
+
+class NewsSentimentSchema(pw.Schema):
+    """
+    Schema for news sentiment data from Kafka.
+    """
+    symbol: str
+    weighted_avg_sentiment: float
+    news_title: str
+    ts_ms: int
+

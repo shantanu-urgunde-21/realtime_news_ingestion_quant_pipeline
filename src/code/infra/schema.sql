@@ -25,7 +25,9 @@ CREATE TABLE IF NOT EXISTS kafka_input (
     long_signal UInt8,
     short_signal UInt8,
     rsi_timing Int32,
-    pct_change Float32
+    pct_change Float32,
+    weighted_avg_sentiment Float32,
+    news_title String
 )
 ENGINE = Kafka
 SETTINGS kafka_broker_list = 'kafka:9092',        -- Use docker service name in production
@@ -56,7 +58,9 @@ CREATE TABLE IF NOT EXISTS final_table (
     long_signal UInt8,
     short_signal UInt8,
     rsi_timing Int32,
-    pct_change Float32
+    pct_change Float32,
+    weighted_avg_sentiment Float32,
+    news_title String
 )
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(timestamp)          -- Monthly partitions → faster queries & cleanup
@@ -89,7 +93,9 @@ SELECT
     long_signal,
     short_signal,
     rsi_timing,
-    pct_change
+    pct_change,
+    weighted_avg_sentiment,
+    news_title
 FROM kafka_input;
 
 
