@@ -46,6 +46,22 @@ logger = logging.getLogger(MICROSERVICE_NAME)
 logger.info(f"Starting {MICROSERVICE_NAME} - Initializing news ingestion pipeline")
 logger.info(f"Using dummy API: {USE_DUMMY_API}")
 
+# Set up ClickHouse Centralized Log Harvesting (Warning/Error/Fatal)
+from infra.telemetry_client import ClickHouseLogHandler
+ch_handler = ClickHouseLogHandler(service_name=MICROSERVICE_NAME)
+ch_handler.setFormatter(logging.Formatter(fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+logging.getLogger().addHandler(ch_handler)
+logger.info("Centralized ClickHouse logging telemetry registered successfully")
+
+# Start Container System Resource Telemetry Daemon
+try:
+    from infra.system_daemon import start_system_daemon
+    start_system_daemon(MICROSERVICE_NAME)
+    logger.info("System Resource Telemetry Daemon started successfully")
+except Exception as e:
+    logger.warning(f"Failed to start System Resource Telemetry Daemon: {e}")
+
+
 ALPHA_API_KEY = os.getenv("API_KEY")
 BASE_URL = os.getenv("API_URL")
 TIMESTAMP_TOPIC = "stock_timestamp"

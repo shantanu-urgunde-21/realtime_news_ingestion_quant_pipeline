@@ -36,6 +36,25 @@ logger = logging.getLogger(MICROSERVICE_NAME)
 logger.info(f"Starting {MICROSERVICE_NAME} - Initializing Firebase and Kafka consumer")
 logger.info(f"Using dummy Firebase: {USE_DUMMY_FIREBASE}")
 
+# Initialize Observability Telemetry
+from infra.telemetry_client import TelemetryClient, ClickHouseLogHandler
+telemetry = TelemetryClient()
+
+# Set up ClickHouse Centralized Log Harvesting (Warning/Error/Fatal)
+ch_handler = ClickHouseLogHandler(service_name=MICROSERVICE_NAME)
+ch_handler.setFormatter(logging.Formatter(fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+logging.getLogger().addHandler(ch_handler)
+logger.info("Centralized ClickHouse logging telemetry registered successfully")
+
+# Start Container System Resource Telemetry Daemon
+try:
+    from infra.system_daemon import start_system_daemon
+    start_system_daemon(MICROSERVICE_NAME)
+    logger.info("System Resource Telemetry Daemon started successfully")
+except Exception as e:
+    logger.warning(f"Failed to start System Resource Telemetry Daemon: {e}")
+
+
 # ============================================================================
 # Firebase Initialization
 # ============================================================================
@@ -134,7 +153,20 @@ try:
 
         try:
             # Send push notification via Firebase Cloud Messaging
+            start_fcm = time.time()
             res = send_data_message(data)
+            end_fcm = time.time()
+            fcm_push_delay = (end_fcm - start_fcm) * 1000
+            
+            # Log FCM latency
+            telemetry.log_latency(
+                service_name=MICROSERVICE_NAME,
+                symbol=data.get("symbol", "UNKNOWN"),
+                metric_name="fcm_push_delay",
+                latency_ms=fcm_push_delay,
+                cycle=data.get("cycle", 0)
+            )
+            
             logger.info(f"Alert notification sent successfully. Message ID: {res}")
             print(f"✓ Alert sent for {data.get('symbol')}: {res}")
         except Exception as e:

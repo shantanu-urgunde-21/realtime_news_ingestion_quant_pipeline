@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.4.0] - Observability, Telemetry & Testing Suite
+### Added
+- Added dynamic container resource monitoring (`src/code/infra/system_daemon.py`) that captures CPU %, memory used/total (MB), disk space usage (GB), and network RX/TX bytes every 10 seconds via `psutil` (supporting both host virtual memory and cgroups container bounds).
+- Added a standalone `kafka_monitor` service in `docker-compose.yml` running `src/code/infra/kafka_monitor.py` to continuously poll broker partition-level high-water marks and committed group offsets, computing consumer lag and real-time processing velocity (`messages_per_sec`) every 15 seconds.
+- Added `run_benchmark.py` integration validation and load testing script inside `src/code/infra/` that replays CSV ticks at high speed, verifies the 3x retry and DLQ routing via failure injection (FCM error triggers), queries ClickHouse metrics databases, and automatically compiles a comprehensive performance report (`docs/monitoring_verification_report.md`).
+- Added custom logging dependencies `requests` and `psutil` inside `src/code/calc_service/requirements.txt`.
+
+### Changed
+- Extended the thread-safe Singleton `TelemetryClient` in `src/code/infra/telemetry_client.py` to support asynchronous batch insertions into `telemetry.system_metrics` and `telemetry.kafka_metrics` tables without blocking the main calculation thread.
+- Registered the `ClickHouseLogHandler` inside `src/code/calc_service/config.py` to capture and forward warning/error exceptions directly to `telemetry.service_logs`.
+- Registered `start_system_daemon` calls inside the startup configurations of all 5 microservices (`stock_service`, `news_service`, `calc_service`, `decision_service`, `backend`) to activate container-level resource telemetry.
+- Integrated `trigger_error` and symbol `"FAIL"` checks inside `dummy_firebase.py` to enable deterministic failure injection and verify DLQ routing.
+
+---
+
 ## [1.3.0] - Decoupled Event-Driven Streaming & Stateful Joins
 ### Added
 - Added a new service `clickhouse_monitoring` to `docker-compose.yml` mapped to a new host persistent volume `clickhouse_monitoring_data` and exposed on HTTP port `8124` / Native port `9001`.

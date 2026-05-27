@@ -1,5 +1,10 @@
 /docs/
 /__pycache__/
+venv/
+.venv/
+env/
+*/venv/
+
 /src/calc_service/__pycache__/
 /src/decision_service/__pycache__/
 /src/news_service/__pycache__/

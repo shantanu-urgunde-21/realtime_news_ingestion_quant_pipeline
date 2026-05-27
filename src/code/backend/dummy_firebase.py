@@ -27,8 +27,11 @@ class MockMessaging:
     Message = MockMessage
     
     def send(self, message):
+        if message.data and (message.data.get("symbol") == "FAIL" or "trigger_error" in message.data):
+            raise Exception("Simulated Firebase connection failure - triggering retry & DLQ logic")
         msg_id = f"mock-msg-{uuid.uuid4()}"
         logger.info(f"[DUMMY FIREBASE] Sent mock message to topic '{message.topic}'. ID: {msg_id}")
         return msg_id
+
 
 messaging = MockMessaging()

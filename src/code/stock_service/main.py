@@ -37,6 +37,22 @@ logging.basicConfig(
 logger = logging.getLogger(MICROSERVICE_NAME)
 logger.info(f"Starting {MICROSERVICE_NAME} - Initializing stock data replay pipeline")
 
+# Set up ClickHouse Centralized Log Harvesting (Warning/Error/Fatal)
+from infra.telemetry_client import ClickHouseLogHandler
+ch_handler = ClickHouseLogHandler(service_name=MICROSERVICE_NAME)
+ch_handler.setFormatter(logging.Formatter(fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+logging.getLogger().addHandler(ch_handler)
+logger.info("Centralized ClickHouse logging telemetry registered successfully")
+
+# Start Container System Resource Telemetry Daemon
+try:
+    from infra.system_daemon import start_system_daemon
+    start_system_daemon(MICROSERVICE_NAME)
+    logger.info("System Resource Telemetry Daemon started successfully")
+except Exception as e:
+    logger.warning(f"Failed to start System Resource Telemetry Daemon: {e}")
+
+
 # ============================================================================
 # Input Schema Definition
 # ============================================================================

@@ -1,2 +1,4 @@
 pathway
 python-dotenv
+requests
+psutil

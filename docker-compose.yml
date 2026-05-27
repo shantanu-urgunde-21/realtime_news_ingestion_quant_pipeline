@@ -98,6 +98,8 @@ services:
       resources:
         limits:
           memory: 512M
+    volumes:
+      - ./src/code/infra:/app/infra
     restart: on-failure
 
   news_service:
@@ -119,6 +121,8 @@ services:
       resources:
         limits:
           memory: 512M
+    volumes:
+      - ./src/code/infra:/app/infra
     restart: on-failure
 
   backend:
@@ -135,6 +139,8 @@ services:
       resources:
         limits:
           memory: 512M
+    volumes:
+      - ./src/code/infra:/app/infra
     restart: on-failure
 
   decision_service:
@@ -155,6 +161,8 @@ services:
       resources:
         limits:
           memory: 1G
+    volumes:
+      - ./src/code/infra:/app/infra
     restart: on-failure
 
   calc_service:
@@ -172,6 +180,22 @@ services:
           memory: 4G
     volumes:
       - calc_data:/app/data
+      - ./src/code/infra:/app/infra
+    restart: on-failure
+
+  kafka_monitor:
+    build:
+      context: ./src/code/kafka_monitor
+    container_name: kafka_monitor
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse_monitoring:
+        condition: service_healthy
+    environment:
+      - KAFKA_BROKER=kafka:9092
+    volumes:
+      - ./src/code/infra:/app/infra
     restart: on-failure
   # ========== Legacy/Commented Services ==========
   # (Kept for reference - not used in current setup)

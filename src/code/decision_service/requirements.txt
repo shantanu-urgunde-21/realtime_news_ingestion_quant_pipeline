@@ -3,3 +3,5 @@ xgboost
 numpy
 scikit-learn
 pandas
+requests
+psutil
