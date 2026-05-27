@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.1] - Local Execution & Stability Fixes
+### Added
+- Added script `run_local.sh` to start and stop services locally without working directory errors.
+- Added `README_LOCAL.md` with simple setup instructions and GARCH warm-up timings.
+- Added rules to `.gitignore` to ignore virtual environments, log files, data folders, and local `.env` files.
+
+### Fixed
+- Fixed ClickHouse connection timeouts on WSL2/Linux by replacing `localhost` with `127.0.0.1` in `.env`.
+- Fixed ClickHouse 401 connection error in news_service by adding default credentials to connection strings.
+- Fixed slow ClickHouse health checks in docker-compose by using native clickhouse-client socket queries.
+- Fixed Pathway persistence crashes across package updates by using modern Config wrapper.
+
 ## [1.3.0] - Decoupled Event-Driven Streaming & Stateful Joins
 ### Added
 - Added a new service `clickhouse_monitoring` to `docker-compose.yml` mapped to a new host persistent volume `clickhouse_monitoring_data` and exposed on HTTP port `8124` / Native port `9001`.

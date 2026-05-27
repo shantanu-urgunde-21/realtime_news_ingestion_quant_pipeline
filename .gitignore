@@ -1,10 +1,20 @@
 /docs/
-/__pycache__/
-/src/calc_service/__pycache__/
-/src/decision_service/__pycache__/
-/src/news_service/__pycache__/
-/src/stock_service/__pycache__/
-/src/code/calc_service/__pycache__/
-/src/code/decision_service/__pycache__/
-/src/code/news_service/__pycache__/
-/src/code/stock_service/__pycache__/
+**/__pycache__/
+__pycache__
+venv/
+.venv/
+env/
+**/venv/
+**/env/
+
+# Application Logs
+logs/
+src/code/logs/
+*.log
+
+# Application Data Persistence (Pathway / ClickHouse / etc.)
+data/
+src/code/calc_service/data/
+
+# Environment configurations
+.env
