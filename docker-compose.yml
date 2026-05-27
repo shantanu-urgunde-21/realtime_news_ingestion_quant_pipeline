@@ -52,15 +52,11 @@ services:
       - clickhouse_data:/var/lib/clickhouse
       - ./src/code/infra/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
-      # test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
-      # interval: 5s
-      # timeout: 5s
-      # retries: 10
-      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1" ]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+      test: [ "CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   clickhouse_monitoring:
     image: clickhouse/clickhouse-server:latest
@@ -78,11 +74,11 @@ services:
       - clickhouse_monitoring_data:/var/lib/clickhouse
       - ./src/code/infra/monitoring_schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
-      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1" ]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+      test: [ "CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   stock_service:
     build:
@@ -113,7 +109,7 @@ services:
         condition: service_healthy
     environment:
       - KAFKA_BROKER=kafka:9092
-      - CLICKHOUSE_URL=http://clickhouse:8123
+      - CLICKHOUSE_URL=http://default:password@clickhouse:8123
       - USE_DUMMY_API=true
       - API_KEY=${API_KEY:-dummy_key}
       - API_URL=${API_URL:-dummy_url}

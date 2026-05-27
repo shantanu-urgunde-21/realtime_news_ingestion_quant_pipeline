@@ -441,10 +441,14 @@ try:
     try:
         backend = pw.persistence.Backend.filesystem("./data")
         try:
-            pw.run(persistence_backend=backend)
+            # Wrap in Config to match newer Pathway API requirements
+            config = pw.persistence.Config(backend)
+            pw.run(persistence_config=config)
         except TypeError:
-            # Fallback for different Pathway versions
-            pw.run(persistence_config=backend)
+            try:
+                pw.run(persistence_backend=backend)
+            except TypeError:
+                pw.run(persistence_config=backend)
     except Exception as e:
         logger.warning(f"Persistence not supported or failed: {e}. Running without persistence.")
         pw.run()

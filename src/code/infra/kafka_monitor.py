@@ -18,16 +18,18 @@ logging.basicConfig(
 logger = logging.getLogger("kafka_monitor")
 
 def run_kafka_monitor():
-    kafka_broker = os.getenv("KAFKA_BROKER", "kafka:9092")
+    # Environment-aware Kafka broker resolution
+    default_broker = "kafka:9092" if os.path.exists("/.dockerenv") else "localhost:9092"
+    kafka_broker = os.getenv("KAFKA_BROKER", default_broker)
     logger.info(f"Initializing Kafka Lag Monitor connecting to {kafka_broker}...")
 
     # Wait for Kafka to boot up if started as a container service
-    max_init_retries = 10
+    max_init_retries = 15
     consumer = None
     for attempt in range(max_init_retries):
         try:
             consumer = KafkaConsumer(bootstrap_servers=kafka_broker)
-            logger.info("Kafka consumer initialized successfully.")
+            logger.info("Main Kafka metadata consumer initialized successfully.")
             break
         except Exception as e:
             logger.warning(f"Failed to connect to Kafka (attempt {attempt+1}/{max_init_retries}): {e}. Retrying in 5 seconds...")
@@ -47,6 +49,9 @@ def run_kafka_monitor():
         {"topic": "stock_calculation_table", "group": "math-group"},
         {"topic": "alert", "group": "math-group"}
     ]
+
+    # Persistent cache for consumer groups to avoid socket leaks and TCP handshakes every 15s
+    group_consumers_cache = {}
 
     # Dictionary to keep track of previous commits to calculate processing velocity
     # Key: (topic, group, partition) -> Value: (offset, timestamp)
@@ -71,15 +76,19 @@ def run_kafka_monitor():
                     logger.debug(f"Topic {topic} has no partitions or does not exist yet.")
                     continue
                 
-                # Create a client for the specific consumer group to get committed offsets
-                try:
-                    group_consumer = KafkaConsumer(
-                        bootstrap_servers=kafka_broker,
-                        group_id=group
-                    )
-                except Exception as e:
-                    logger.warning(f"Could not connect to group {group}: {e}")
-                    continue
+                # Retrieve or initialize cached consumer connection for this group
+                if group not in group_consumers_cache:
+                    try:
+                        group_consumers_cache[group] = KafkaConsumer(
+                            bootstrap_servers=kafka_broker,
+                            group_id=group
+                        )
+                        logger.info(f"Created persistent consumer connection for group '{group}'")
+                    except Exception as e:
+                        logger.warning(f"Could not connect to group '{group}': {e}")
+                        continue
+                
+                group_consumer = group_consumers_cache[group]
 
                 # Query high watermarks (end offsets)
                 tps = [TopicPartition(topic, p) for p in partitions]
@@ -87,7 +96,6 @@ def run_kafka_monitor():
                     latest_offsets = consumer.end_offsets(tps)
                 except Exception as e:
                     logger.warning(f"Failed to fetch end offsets for topic {topic}: {e}")
-                    group_consumer.close()
                     continue
 
                 # Compute partition metrics
@@ -140,8 +148,6 @@ def run_kafka_monitor():
                         consumer_lag=consumer_lag,
                         messages_per_sec=messages_per_sec
                     )
-
-                group_consumer.close()
                 
         except Exception as e:
             logger.error(f"Error in Kafka telemetry poll iteration: {e}", exc_info=True)

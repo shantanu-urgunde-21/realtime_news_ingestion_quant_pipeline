@@ -5,6 +5,7 @@ import time
 import queue
 import threading
 import logging
+import socket
 from datetime import datetime
 
 logger = logging.getLogger("telemetry_client")
@@ -12,8 +13,10 @@ logger = logging.getLogger("telemetry_client")
 class TelemetryClient:
     """
     Asynchronous, non-blocking Telemetry Client for quantitative pipeline metrics.
-    Uses a thread-safe Queue and background worker thread to batch and push records
+    Uses a thread-safe Queue and a background worker thread to batch and push records
     to the clickhouse_monitoring server via its HTTP interface.
+    
+    Fully environment-aware and fail-soft (doesn't block or spam on connection loss).
     """
     _instance = None
     _lock = threading.Lock()
@@ -29,17 +32,31 @@ class TelemetryClient:
         if self._initialized:
             return
         
-        # In Docker Compose, the monitoring server hostname is clickhouse_monitoring
-        self.url = os.getenv("CLICKHOUSE_MONITORING_URL", "http://clickhouse_monitoring:8123")
+        # 1. Environment-Aware URL Resolution
+        env_url = os.getenv("CLICKHOUSE_MONITORING_URL")
+        if env_url:
+            self.url = env_url
+        else:
+            # Detect if running inside a Docker container
+            if os.path.exists("/.dockerenv"):
+                self.url = "http://clickhouse_monitoring:8123"
+            else:
+                # Running natively on the host machine
+                self.url = "http://localhost:8124"
+        
         self.password = os.getenv("CLICKHOUSE_PASSWORD", "password")
-        self.queue = queue.Queue()
+        self.queue = queue.Queue(maxsize=5000)  # Capped memory queue
         self.stop_event = threading.Event()
+        
+        # Tracking connection state to suppress redundant logging alerts on failure
+        self.server_online = True
+        self.last_warning_time = 0
         
         # Start background worker thread
         self.worker_thread = threading.Thread(target=self._worker, daemon=True)
         self.worker_thread.start()
         self._initialized = True
-        logger.info(f"TelemetryClient initialized connecting to {self.url}")
+        logger.info(f"TelemetryClient initialized. Endpoint: {self.url} (Docker container detected: {os.path.exists('/.dockerenv')})")
 
     def log_latency(self, service_name, symbol, metric_name, latency_ms, cycle=0):
         """
@@ -60,7 +77,7 @@ class TelemetryClient:
             "latency_ms": float(latency_ms),
             "cycle": int(cycle)
         }
-        self.queue.put(("pipeline_latencies", record))
+        self._safe_put(("pipeline_latencies", record))
 
     def log_service_log(self, service_name, log_level, message, exception_details="", host_name=""):
         """
@@ -74,7 +91,7 @@ class TelemetryClient:
             "exception_details": exception_details or "",
             "host_name": host_name or os.getenv("HOSTNAME", "localhost")
         }
-        self.queue.put(("service_logs", record))
+        self._safe_put(("service_logs", record))
 
     def log_system_metrics(self, service_name, cpu_utilization_pct, memory_used_mb, memory_total_mb, disk_used_gb, network_rx_bytes, network_tx_bytes):
         """
@@ -90,7 +107,7 @@ class TelemetryClient:
             "network_rx_bytes": int(network_rx_bytes),
             "network_tx_bytes": int(network_tx_bytes)
         }
-        self.queue.put(("system_metrics", record))
+        self._safe_put(("system_metrics", record))
 
     def log_kafka_metrics(self, topic_name, consumer_group, partition, committed_offset, latest_offset, consumer_lag, messages_per_sec):
         """
@@ -106,7 +123,19 @@ class TelemetryClient:
             "consumer_lag": int(consumer_lag),
             "messages_per_sec": float(messages_per_sec)
         }
-        self.queue.put(("kafka_metrics", record))
+        self._safe_put(("kafka_metrics", record))
+
+    def _safe_put(self, item):
+        """Thread-safe queue insertion with drop-oldest fallback if memory limits reached."""
+        try:
+            self.queue.put_nowait(item)
+        except queue.Full:
+            try:
+                # Drop the oldest item in the queue to make room
+                self.queue.get_nowait()
+                self.queue.put_nowait(item)
+            except Exception:
+                pass
 
     def _worker(self):
         """Background worker loop to batch and write telemetry records periodically."""
@@ -151,33 +180,51 @@ class TelemetryClient:
             payload = "\n".join(json.dumps(r) for r in records)
             query = f"INSERT INTO telemetry.{table} FORMAT JSONEachRow"
             
+            # Auth headers: Fixes both credentials and key auth mismatches
             headers = {
                 "Content-Type": "application/x-ndjson"
             }
             if self.password:
+                headers["X-ClickHouse-User"] = "default"
                 headers["X-ClickHouse-Key"] = self.password
                 
             try:
                 params = {"query": query}
+                # Strict timeout (2.0s max) to prevent blocking trading threads
                 response = requests.post(
                     self.url,
                     params=params,
                     data=payload,
                     headers=headers,
-                    timeout=5
+                    timeout=2.0
                 )
+                
                 if response.status_code == 200:
-                    records.clear()  # Flush successful, clear batch buffer
+                    records.clear()
+                    if not self.server_online:
+                        self.server_online = True
+                        print(f"[TelemetryClient Info] Reconnected successfully to telemetry server: {self.url}")
                 else:
-                    print(f"[TelemetryClient Alert] Failed to flush to {table}: HTTP {response.status_code} - {response.text[:200]}")
+                    self._handle_flush_failure(
+                        f"HTTP {response.status_code} - {response.text[:150]}"
+                    )
             except Exception as e:
-                print(f"[TelemetryClient Warning] Failed to post telemetry to ClickHouse: {e}")
+                self._handle_flush_failure(str(e))
+
+    def _handle_flush_failure(self, error_msg):
+        """Suppress traceback spam and throttle monitoring offline warnings."""
+        self.server_online = False
+        current_time = time.time()
+        # Rate limit offline alerts to once per 60 seconds
+        if current_time - self.last_warning_time > 60:
+            print(f"[TelemetryClient Warning] Telemetry server offline or rejecting data. Telemetry is disabled. Reason: {error_msg}")
+            self.last_warning_time = current_time
 
     def shutdown(self):
         """Gracefully shut down background queue worker thread."""
         self.stop_event.set()
         if self.worker_thread.is_alive():
-            self.worker_thread.join(timeout=3.0)
+            self.worker_thread.join(timeout=2.0)
 
 
 class ClickHouseLogHandler(logging.Handler):
@@ -211,5 +258,5 @@ class ClickHouseLogHandler(logging.Handler):
                 exception_details=exception_details
             )
         except Exception as e:
+            # Suppress logging recursive failure loop
             print(f"[ClickHouseLogHandler Error] Failed to emit log: {e}")
-
