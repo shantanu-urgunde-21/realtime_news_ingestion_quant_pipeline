@@ -128,6 +128,49 @@ tail_logs() {
     fi
 }
 
+query_telemetry() {
+    local target="$1"
+    local container_name="clickhouse_monitoring"
+    local db_name="telemetry"
+    local user="default"
+    local password="password"
+
+    if ! docker ps --filter "name=${container_name}" --filter "status=running" | grep -q "${container_name}"; then
+        echo -e "\033[0;31m❌ Error: Container '${container_name}' is not running!\033[0m"
+        echo "Please start the stack with './run_local.sh start' first."
+        exit 1
+    fi
+
+    local run_query_cmd="docker exec -t ${container_name} clickhouse-client --user ${user} --password ${password} --database ${db_name} --query"
+
+    case "$target" in
+        latencies)
+            echo -e "\033[1;34m📊 Querying Latency Percentiles (Last 1 Hour)...\033[0m"
+            $run_query_cmd "SELECT service_name, metric_name, count() as samples, round(avg(latency_ms), 2) as avg_ms, round(quantile(0.50)(latency_ms), 2) as p50_ms, round(quantile(0.90)(latency_ms), 2) as p90_ms, round(quantile(0.99)(latency_ms), 2) as p99_ms FROM pipeline_latencies WHERE timestamp >= now() - INTERVAL 1 HOUR GROUP BY service_name, metric_name ORDER BY p99_ms DESC;"
+            ;;
+        lag)
+            echo -e "\033[1;34m📊 Querying Kafka Active Lags and Processing Velocity...\033[0m"
+            $run_query_cmd "SELECT topic_name, consumer_group, sum(consumer_lag) as total_lag, round(avg(messages_per_sec), 2) as avg_rate_msg_sec, max(latest_offset) as max_offset FROM kafka_metrics WHERE timestamp >= now() - INTERVAL 30 MINUTE GROUP BY topic_name, consumer_group ORDER BY total_lag DESC;"
+            ;;
+        resources)
+            echo -e "\033[1;34m📊 Querying Peak & Average Container Resource Usage...\033[0m"
+            $run_query_cmd "SELECT service_name, round(avg(cpu_utilization_pct), 1) as avg_cpu_pct, round(max(cpu_utilization_pct), 1) as peak_cpu_pct, round(avg(memory_used_mb), 0) as avg_mem_mb, round(max(memory_used_mb), 0) as peak_mem_mb, round(max(memory_total_mb), 0) as limit_mem_mb FROM system_metrics WHERE timestamp >= now() - INTERVAL 12 HOUR GROUP BY service_name ORDER BY peak_cpu_pct DESC;"
+            ;;
+        errors)
+            echo -e "\033[1;31m📊 Querying Error & Warning Counts (Last 24 Hours)...\033[0m"
+            $run_query_cmd "SELECT service_name, log_level, count() as total_errors FROM service_logs WHERE log_level IN ('WARNING', 'ERROR', 'FATAL') AND timestamp >= now() - INTERVAL 24 HOUR GROUP BY service_name, log_level ORDER BY total_errors DESC;"
+            ;;
+        interactive)
+            echo -e "\033[1;32m🐚 Opening interactive ClickHouse SQL shell...\033[0m"
+            docker exec -it "${container_name}" clickhouse-client --user "${user}" --password "${password}" --database "${db_name}"
+            ;;
+        *)
+            echo -e "\033[1mUsage:\033[0m $0 telemetry {latencies|lag|resources|errors|interactive}"
+            exit 1
+            ;;
+    esac
+}
+
 case "$1" in
     start)
         check_hosts
@@ -143,9 +186,13 @@ case "$1" in
     logs)
         tail_logs "$2"
         ;;
+    telemetry)
+        query_telemetry "$2"
+        ;;
     *)
-        echo "Usage: $0 {start|stop|status|logs [service_name]}"
+        echo "Usage: $0 {start|stop|status|logs [service_name]|telemetry [query_type]}"
         echo "   Logs services: backend, decision_service, calc_service, news_service, stock_service"
+        echo "   Telemetry types: latencies, lag, resources, errors, interactive"
         exit 1
         ;;
 esac
