@@ -193,6 +193,25 @@ services:
     volumes:
       - ./src/code/infra:/app/infra
     restart: on-failure
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+    depends_on:
+      clickhouse_monitoring:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: on-failure
+
   # ========== Legacy/Commented Services ==========
   # (Kept for reference - not used in current setup)
   # news_service:
@@ -234,3 +253,4 @@ volumes:
   clickhouse_data:
   clickhouse_monitoring_data:
   calc_data:
+  grafana_data:
