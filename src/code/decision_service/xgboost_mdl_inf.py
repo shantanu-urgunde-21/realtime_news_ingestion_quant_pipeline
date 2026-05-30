@@ -295,6 +295,9 @@ try:
         alert_threshold_prob = 0.5
         
         if (abs(predicted_change) > alert_threshold_pct) and (big_move_prob > alert_threshold_prob):
+            import uuid
+            alert_id = str(uuid.uuid4())
+            
             record = {
                 "symbol": current_symbol,
                 "Predicted_change": float(predicted_change),
@@ -309,10 +312,25 @@ try:
             try:
                 producer.send("alert", value=record)
                 producer.flush()
+                
+                # Log alert to telemetry for business metrics
+                telemetry.log_alert(
+                    symbol=current_symbol,
+                    predicted_change_pct=float(predicted_change),
+                    prediction_confidence=float(big_move_prob),
+                    sentiment_score=float(weighted_sentiment),
+                    rsi_signal=int(data.get("rsi_timing", 0)),
+                    model_name="xgb_pct_change_classifier",
+                    ml_inference_latency_ms=float(ml_inference_latency),
+                    triggered_by="price_and_confidence_threshold",
+                    alert_id=alert_id
+                )
+                
                 logger.info(
                     f"Alert sent for {current_symbol}: "
                     f"predicted_change={predicted_change:.4f}%, "
-                    f"big_move_prob={big_move_prob:.4f}"
+                    f"big_move_prob={big_move_prob:.4f}, "
+                    f"alert_id={alert_id}"
                 )
                 print(f"Alert sent for {current_symbol}")
             except Exception as e:

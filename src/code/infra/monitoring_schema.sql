@@ -78,3 +78,25 @@ ENGINE = MergeTree
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (log_level, service_name, timestamp)
 SETTINGS index_granularity = 8192;
+
+
+/* ============================================================
+   5. TRADING ALERTS & BUSINESS METRICS
+   Tracks alerts generated, predictions, confidence scores, and trading signals
+   ============================================================ */
+CREATE TABLE IF NOT EXISTS alerts_log (
+    timestamp DateTime DEFAULT now(),
+    symbol LowCardinality(String),
+    predicted_change_pct Float32,
+    prediction_confidence Float32,  -- 0.0 to 1.0
+    sentiment_score Float32,  -- -1.0 to 1.0
+    rsi_signal Int8,  -- -2 to 2 (strong buy/sell to strong sell/buy)
+    model_name LowCardinality(String),  -- 'xgb_price_model', 'xgb_pct_model', etc.
+    ml_inference_latency_ms Float32,
+    triggered_by LowCardinality(String),  -- 'price_threshold', 'confidence_threshold', etc.
+    alert_id String  -- Unique identifier for tracking
+)
+ENGINE = MergeTree
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (symbol, timestamp, prediction_confidence)
+SETTINGS index_granularity = 8192;

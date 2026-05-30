@@ -1,0 +1,399 @@
+{
+    "annotations": {
+        "list": []
+    },
+    "description": "Alert generation metrics and business KPIs - trading signals, confidence scores",
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "id": null,
+    "links": [],
+    "liveNow": true,
+    "panels": [
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 0,
+                "y": 0
+            },
+            "id": 1,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "values": false,
+                    "fields": "",
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "text": {},
+                "textMode": "auto"
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT count() as total_alerts FROM telemetry.alerts_log WHERE timestamp >= now() - INTERVAL 1 HOUR",
+                    "refId": "A"
+                }
+            ],
+            "title": "Alerts Generated (1 Hour)",
+            "type": "stat"
+        },
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "red",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 0.5
+                            },
+                            {
+                                "color": "green",
+                                "value": 0.7
+                            }
+                        ]
+                    },
+                    "unit": "percentunit"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 8,
+                "y": 0
+            },
+            "id": 2,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "values": false,
+                    "fields": "",
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "text": {},
+                "textMode": "auto"
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT avg(prediction_confidence) as avg_confidence FROM telemetry.alerts_log WHERE timestamp >= now() - INTERVAL 1 HOUR",
+                    "refId": "A"
+                }
+            ],
+            "title": "Avg Prediction Confidence",
+            "type": "stat"
+        },
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 16,
+                "y": 0
+            },
+            "id": 3,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "values": false,
+                    "fields": "",
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "text": {},
+                "textMode": "auto"
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT countDistinct(symbol) as unique_symbols FROM telemetry.alerts_log WHERE timestamp >= now() - INTERVAL 1 HOUR",
+                    "refId": "A"
+                }
+            ],
+            "title": "Unique Symbols (1 Hour)",
+            "type": "stat"
+        },
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "Alert Count",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "bars",
+                        "fillOpacity": 80,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "tooltip": false,
+                            "viz": false,
+                            "legend": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": true
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 0,
+                "y": 8
+            },
+            "id": 4,
+            "options": {
+                "legend": {
+                    "calcs": [],
+                    "displayMode": "list",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "none"
+                }
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT toStartOfHour(timestamp) as hour, count() as alert_count FROM telemetry.alerts_log WHERE timestamp >= now() - INTERVAL 24 HOUR GROUP BY hour ORDER BY hour ASC",
+                    "refId": "A"
+                }
+            ],
+            "title": "Alert Generation Rate (24 Hour Window)",
+            "type": "timeseries"
+        },
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "Avg Prediction Change %",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "tooltip": false,
+                            "viz": false,
+                            "legend": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 2,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": true
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 12,
+                "y": 8
+            },
+            "id": 5,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "max",
+                        "min"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "none"
+                }
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT toStartOfMinute(timestamp) as time, avg(predicted_change_pct) as avg_prediction FROM telemetry.alerts_log WHERE timestamp >= now() - INTERVAL 6 HOUR GROUP BY time ORDER BY time ASC",
+                    "refId": "A"
+                }
+            ],
+            "title": "Predicted Price Change Distribution",
+            "type": "timeseries"
+        },
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "color-background"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 24,
+                "x": 0,
+                "y": 18
+            },
+            "id": 6,
+            "options": {
+                "showHeader": true
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT symbol, count() as alert_count, avg(predicted_change_pct) as avg_change, min(prediction_confidence) as min_confidence, max(prediction_confidence) as max_confidence, avg(sentiment_score) as avg_sentiment FROM telemetry.alerts_log WHERE timestamp >= now() - INTERVAL 24 HOUR GROUP BY symbol ORDER BY alert_count DESC LIMIT 15",
+                    "refId": "A"
+                }
+            ],
+            "title": "Top Symbols by Alert Count (24 Hours)",
+            "type": "table"
+        }
+    ],
+    "schemaVersion": 38,
+    "style": "dark",
+    "tags": [
+        "sentinel-stream",
+        "alerts",
+        "business-metrics"
+    ],
+    "templating": {
+        "list": []
+    },
+    "time": {
+        "from": "now-24h",
+        "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "Sentinel-Stream: Alerts & Business KPIs",
+    "uid": "sentinel-alerts",
+    "version": 1,
+    "weekStart": ""
+}

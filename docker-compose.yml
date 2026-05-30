@@ -201,6 +201,7 @@ services:
       - "3000:3000"
     environment:
       - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+      - GF_SECURITY_ADMIN_PASSWORD=admin
     depends_on:
       clickhouse_monitoring:
         condition: service_healthy
@@ -210,43 +211,9 @@ services:
           memory: 512M
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./src/code/infra/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./src/code/infra/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
     restart: on-failure
-
-  # ========== Legacy/Commented Services ==========
-  # (Kept for reference - not used in current setup)
-  # news_service:
-  #   build:
-  #     context: ./src/code/news_service
-  #   container_name: news_service
-  #   depends_on:
-  #     kafka:
-  #       condition: service_healthy
-  #     clickhouse:
-  #       condition: service_healthy
-  #     infra_init:
-  #       condition: service_completed_successfully
-  #     calc_service:
-  #       condition: service_started
-  #   environment:
-  #     - KAFKA_BROKER=kafka:9092
-  #     - CLICKHOUSE_URL=http://clickhouse:8123
-  #     - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-password}
-  #   env_file:
-  #     - ./src/code/news_service/.env
-  #   restart: on-failure
-
-  # stock_service:
-  #   build:
-  #     context: ./src/code/stock_service
-  #   container_name: stock_service
-  #   depends_on:
-  #     kafka:
-  #       condition: service_healthy
-  #     news_service:
-  #       condition: service_started
-  #   environment:
-  #     - KAFKA_BROKER=kafka:9092
-  #   restart: on-failure
 
 volumes:
   kafka_kraft:

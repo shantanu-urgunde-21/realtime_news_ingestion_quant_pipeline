@@ -125,6 +125,35 @@ class TelemetryClient:
         }
         self._safe_put(("kafka_metrics", record))
 
+    def log_alert(self, symbol, predicted_change_pct, prediction_confidence, sentiment_score, rsi_signal, model_name, ml_inference_latency_ms, triggered_by, alert_id):
+        """
+        Queue a trading alert record for business metrics tracking.
+        
+        Args:
+            symbol: Stock ticker symbol (e.g., 'AAPL')
+            predicted_change_pct: Predicted price change percentage
+            prediction_confidence: Model confidence score (0.0-1.0)
+            sentiment_score: Sentiment score from news (-1.0 to 1.0)
+            rsi_signal: RSI signal (-2 to 2)
+            model_name: Name of the model that generated the prediction
+            ml_inference_latency_ms: How long inference took
+            triggered_by: Reason alert was triggered (e.g., 'price_threshold', 'confidence_threshold')
+            alert_id: Unique identifier for this alert
+        """
+        record = {
+            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "symbol": symbol,
+            "predicted_change_pct": float(predicted_change_pct),
+            "prediction_confidence": float(prediction_confidence),
+            "sentiment_score": float(sentiment_score),
+            "rsi_signal": int(rsi_signal),
+            "model_name": model_name,
+            "ml_inference_latency_ms": float(ml_inference_latency_ms),
+            "triggered_by": triggered_by,
+            "alert_id": str(alert_id)
+        }
+        self._safe_put(("alerts_log", record))
+
     def _safe_put(self, item):
         """Thread-safe queue insertion with drop-oldest fallback if memory limits reached."""
         try:
@@ -143,7 +172,8 @@ class TelemetryClient:
             "pipeline_latencies": [],
             "service_logs": [],
             "system_metrics": [],
-            "kafka_metrics": []
+            "kafka_metrics": [],
+            "alerts_log": []
         }
         last_flush_time = time.time()
         

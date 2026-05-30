@@ -1,0 +1,318 @@
+{
+    "annotations": {
+        "list": []
+    },
+    "description": "System resource utilization - CPU, memory, disk, network I/O",
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "id": null,
+    "links": [],
+    "liveNow": true,
+    "panels": [
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "CPU %",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "tooltip": false,
+                            "viz": false,
+                            "legend": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 2,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": true
+                    },
+                    "mappings": [],
+                    "max": 100,
+                    "min": 0,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 70
+                            },
+                            {
+                                "color": "red",
+                                "value": 90
+                            }
+                        ]
+                    },
+                    "unit": "percent"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 0,
+                "y": 0
+            },
+            "id": 1,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "max"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "none"
+                }
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT toStartOfMinute(timestamp) as time, service_name, avg(cpu_utilization_pct) as avg_cpu FROM telemetry.system_metrics WHERE timestamp >= now() - INTERVAL 2 HOUR GROUP BY time, service_name ORDER BY time ASC",
+                    "refId": "A"
+                }
+            ],
+            "title": "CPU Utilization Over Time",
+            "type": "timeseries"
+        },
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "Memory (MB)",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "tooltip": false,
+                            "viz": false,
+                            "legend": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 2,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": true
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "decmbytes"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 12,
+                "y": 0
+            },
+            "id": 2,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "max"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "none"
+                }
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT toStartOfMinute(timestamp) as time, service_name, max(memory_used_mb) as peak_mem FROM telemetry.system_metrics WHERE timestamp >= now() - INTERVAL 2 HOUR GROUP BY time, service_name ORDER BY time ASC",
+                    "refId": "A"
+                }
+            ],
+            "title": "Memory Usage Over Time (Peak per Minute)",
+            "type": "timeseries"
+        },
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "color-background"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 24,
+                "x": 0,
+                "y": 10
+            },
+            "id": 3,
+            "options": {
+                "showHeader": true
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT service_name, max(cpu_utilization_pct) as peak_cpu_pct, avg(cpu_utilization_pct) as avg_cpu_pct, max(memory_used_mb) as peak_mem_mb, max(memory_total_mb) as total_mem_mb, max(disk_used_gb) as disk_used_gb, max(network_rx_bytes) as network_rx_bytes, max(network_tx_bytes) as network_tx_bytes FROM telemetry.system_metrics WHERE timestamp >= now() - INTERVAL 1 HOUR GROUP BY service_name",
+                    "refId": "A"
+                }
+            ],
+            "title": "Resource Summary (Last Hour)",
+            "type": "table"
+        },
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "KB/s",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "tooltip": false,
+                            "viz": false,
+                            "legend": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 2,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": true
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 24,
+                "x": 0,
+                "y": 20
+            },
+            "id": 4,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "max"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "none"
+                }
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT toStartOfMinute(timestamp) as time, service_name, ((network_rx_bytes + network_tx_bytes) / 60 / 1024) as io_kbps FROM telemetry.system_metrics WHERE timestamp >= now() - INTERVAL 2 HOUR ORDER BY time ASC",
+                    "refId": "A"
+                }
+            ],
+            "title": "Network I/O (RX + TX in KB/s)",
+            "type": "timeseries"
+        }
+    ],
+    "schemaVersion": 38,
+    "style": "dark",
+    "tags": [
+        "sentinel-stream",
+        "resources"
+    ],
+    "templating": {
+        "list": []
+    },
+    "time": {
+        "from": "now-2h",
+        "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "Sentinel-Stream: Resource Utilization",
+    "uid": "sentinel-resources",
+    "version": 1,
+    "weekStart": ""
+}

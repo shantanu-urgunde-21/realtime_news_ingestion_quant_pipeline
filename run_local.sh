@@ -31,7 +31,7 @@ check_hosts() {
 
 start_infra() {
     echo "🐳 Starting backing databases and Kafka brokers..."
-    docker compose up -d kafka clickhouse clickhouse_monitoring
+    docker compose up -d kafka clickhouse clickhouse_monitoring grafana
     
     echo "⏳ Waiting for ClickHouse & Kafka to pass health checks..."
     while true; do

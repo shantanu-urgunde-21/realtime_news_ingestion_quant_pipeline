@@ -1,0 +1,248 @@
+{
+    "annotations": {
+        "list": []
+    },
+    "description": "Kafka broker health, lag, throughput, and partition balancing",
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "id": null,
+    "links": [],
+    "liveNow": true,
+    "panels": [
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "Consumer Lag (records)",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "tooltip": false,
+                            "viz": false,
+                            "legend": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 2,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": true
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 5000
+                            },
+                            {
+                                "color": "red",
+                                "value": 10000
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 24,
+                "x": 0,
+                "y": 0
+            },
+            "id": 1,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "max",
+                        "min"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right",
+                    "showLegend": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "none"
+                }
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT toStartOfMinute(timestamp) as time, concat(topic_name, ' [', toString(partition), ']') as partition_label, consumer_lag FROM telemetry.kafka_metrics WHERE timestamp >= now() - INTERVAL 4 HOUR ORDER BY time ASC",
+                    "refId": "A"
+                }
+            ],
+            "title": "Consumer Lag Trend by Topic & Partition",
+            "type": "timeseries"
+        },
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "custom": {
+                        "align": "auto",
+                        "displayMode": "color-background"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 3000
+                            },
+                            {
+                                "color": "red",
+                                "value": 8000
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 0,
+                "y": 10
+            },
+            "id": 2,
+            "options": {
+                "showHeader": true
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT topic_name, partition, consumer_lag, latest_offset, committed_offset, messages_per_sec FROM telemetry.kafka_metrics WHERE timestamp >= now() - INTERVAL 5 MINUTE ORDER BY consumer_lag DESC LIMIT 20",
+                    "refId": "A"
+                }
+            ],
+            "title": "Current Lag per Partition (Last 5 Min)",
+            "type": "table"
+        },
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "Messages/sec",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "tooltip": false,
+                            "viz": false,
+                            "legend": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 2,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": true
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 12,
+                "y": 10
+            },
+            "id": 3,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "max"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "none"
+                }
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT toStartOfMinute(timestamp) as time, topic_name, sum(messages_per_sec) as throughput_mps FROM telemetry.kafka_metrics WHERE timestamp >= now() - INTERVAL 2 HOUR GROUP BY time, topic_name ORDER BY time ASC",
+                    "refId": "A"
+                }
+            ],
+            "title": "Kafka Throughput by Topic (Messages/sec)",
+            "type": "timeseries"
+        }
+    ],
+    "schemaVersion": 38,
+    "style": "dark",
+    "tags": [
+        "sentinel-stream",
+        "kafka"
+    ],
+    "templating": {
+        "list": []
+    },
+    "time": {
+        "from": "now-4h",
+        "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "Sentinel-Stream: Kafka Health",
+    "uid": "sentinel-kafka",
+    "version": 1,
+    "weekStart": ""
+}

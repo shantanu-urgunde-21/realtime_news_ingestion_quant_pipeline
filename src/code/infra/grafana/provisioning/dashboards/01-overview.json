@@ -1,0 +1,358 @@
+{
+    "annotations": {
+        "list": []
+    },
+    "description": "Sentinel-Stream Pipeline Overview - Real-time health and throughput",
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "id": null,
+    "links": [],
+    "liveNow": true,
+    "panels": [
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "hideFrom": {
+                            "tooltip": false,
+                            "viz": false,
+                            "legend": false
+                        }
+                    },
+                    "mappings": []
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 0
+            },
+            "id": 1,
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "pieType": "donut",
+                "tooltip": {
+                    "mode": "single",
+                    "sort": "none"
+                }
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT toStartOfMinute(timestamp) as time, service_name, count() as events FROM telemetry.pipeline_latencies WHERE timestamp >= now() - INTERVAL 1 HOUR GROUP BY service_name, time ORDER BY time DESC LIMIT 1",
+                    "refId": "A"
+                }
+            ],
+            "title": "Event Distribution by Service (Last Hour)",
+            "type": "piechart"
+        },
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 1000
+                            },
+                            {
+                                "color": "red",
+                                "value": 5000
+                            }
+                        ]
+                    },
+                    "unit": "ms"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 0
+            },
+            "id": 2,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "values": false,
+                    "fields": "",
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "text": {},
+                "textMode": "auto"
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT service_name, quantile(0.95)(latency_ms) as p95_ms FROM telemetry.pipeline_latencies WHERE timestamp >= now() - INTERVAL 5 MINUTE GROUP BY service_name",
+                    "refId": "A"
+                }
+            ],
+            "title": "P95 Latency (Last 5 Min) - All Services",
+            "type": "stat"
+        },
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "Latency (ms)",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "tooltip": false,
+                            "viz": false,
+                            "legend": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": true
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 8
+            },
+            "id": 3,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "max",
+                        "min"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "none"
+                }
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT toStartOfMinute(timestamp) as time, metric_name, quantile(0.95)(latency_ms) as p95 FROM telemetry.pipeline_latencies WHERE timestamp >= now() - INTERVAL 2 HOUR GROUP BY time, metric_name ORDER BY time ASC",
+                    "refId": "A"
+                }
+            ],
+            "title": "Pipeline Latency - 95th Percentile Over Time",
+            "type": "timeseries"
+        },
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 5000
+                            },
+                            {
+                                "color": "red",
+                                "value": 10000
+                            }
+                        ]
+                    },
+                    "unit": "short"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 16
+            },
+            "id": 4,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "values": false,
+                    "fields": "",
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "text": {},
+                "textMode": "auto"
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT topic_name, sum(consumer_lag) as total_lag FROM telemetry.kafka_metrics WHERE timestamp >= now() - INTERVAL 5 MINUTE GROUP BY topic_name",
+                    "refId": "A"
+                }
+            ],
+            "title": "Kafka Consumer Lag by Topic",
+            "type": "stat"
+        },
+        {
+            "datasource": "ClickHouse",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "Memory (MB)",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "tooltip": false,
+                            "viz": false,
+                            "legend": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "never",
+                        "spanNulls": true
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 16
+            },
+            "id": 5,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "max"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "none"
+                }
+            },
+            "pluginVersion": "9.0.0",
+            "targets": [
+                {
+                    "format": "time_series",
+                    "rawSql": "SELECT toStartOfMinute(timestamp) as time, service_name, avg(memory_used_mb) as mem_mb FROM telemetry.system_metrics WHERE timestamp >= now() - INTERVAL 2 HOUR GROUP BY time, service_name ORDER BY time ASC",
+                    "refId": "A"
+                }
+            ],
+            "title": "Memory Usage Trend by Service",
+            "type": "timeseries"
+        }
+    ],
+    "schemaVersion": 38,
+    "style": "dark",
+    "tags": [
+        "sentinel-stream",
+        "overview"
+    ],
+    "templating": {
+        "list": []
+    },
+    "time": {
+        "from": "now-2h",
+        "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "Sentinel-Stream: System Overview",
+    "uid": "sentinel-overview",
+    "version": 1,
+    "weekStart": ""
+}
