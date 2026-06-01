@@ -41,6 +41,8 @@ start_infra() {
         
         if [ "$KAFKA_STATUS" == "\"healthy\"" ] && [ "$CH_STATUS" == "\"healthy\"" ] && [ "$CHM_STATUS" == "\"healthy\"" ]; then
             echo -e "🚀 \033[0;32mAll database and messaging services are HEALTHY!\033[0m"
+            echo "⏳ Giving Kafka 10 seconds to finish internal partition leader election..."
+            sleep 10
             break
         else
             echo "   ... still starting (Kafka: $KAFKA_STATUS, ClickHouse: $CH_STATUS, ClickHouse Monitoring: $CHM_STATUS). Waiting 5s..."

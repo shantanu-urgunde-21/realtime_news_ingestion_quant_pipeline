@@ -105,7 +105,7 @@ cd src/code/calc_service
 KAFKA_BROKER=kafka:9092 python3 main.py
 ```
 
-#### **Terminal 4: News Service ( Headline Sentiment Ingestion)**
+#### **Terminal 4: News Service (Headline Sentiment Ingestion)**
 ```bash
 export PYTHONPATH="/home/shantanu/programming/realtime_news_ingestion_quant_pipeline/src/code"
 cd src/code/news_service
