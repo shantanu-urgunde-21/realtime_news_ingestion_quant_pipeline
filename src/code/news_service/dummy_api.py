@@ -111,6 +111,12 @@ def get_news(topics, time_from, time_to, limit=50, sort="LATEST"):
     results = []
     for i, article in enumerate(DUMMY_NEWS_DATA["results"][:limit]):
         synthetic_article = article.copy()
+        
+        # Add random suffix to title and URL to prevent the deduplication engine from filtering them out in subsequent cycles
+        random_suffix = random.randint(100000, 999999)
+        synthetic_article["title"] = f"{article['title']} (Update {random_suffix})"
+        synthetic_article["url"] = f"{article['url']}?ts={random_suffix}"
+        
         # Add randomization to sentiment scores
         synthetic_article["overall_sentiment_score"] += random.uniform(-0.1, 0.1)
         synthetic_article["overall_sentiment_score"] = max(-1, min(1, synthetic_article["overall_sentiment_score"]))
