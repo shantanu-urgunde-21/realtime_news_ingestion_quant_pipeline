@@ -321,7 +321,7 @@ try:
                     sentiment_score=float(weighted_sentiment),
                     rsi_signal=int(data.get("rsi_timing", 0)),
                     model_name="xgb_pct_change_classifier",
-                    ml_inference_latency_ms=float(ml_inference_latency),
+                    ml_inference_latency_ms=float(inference_delay),
                     triggered_by="price_and_confidence_threshold",
                     alert_id=alert_id
                 )
