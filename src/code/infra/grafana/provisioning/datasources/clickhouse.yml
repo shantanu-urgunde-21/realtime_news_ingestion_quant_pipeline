@@ -3,12 +3,17 @@ apiVersion: 1
 datasources:
   - name: ClickHouse
     type: grafana-clickhouse-datasource
-    access: proxy
+    uid: clickhouse
     url: http://clickhouse_monitoring:8123
-    password: password
     jsonData:
       defaultDatabase: telemetry
       username: default
       tlsSkipVerify: true
+      timeout: 60
+      server: clickhouse_monitoring
+      port: 8123
+      protocol: http
+    secureJsonData:
+      password: password
     isDefault: true
     editable: true

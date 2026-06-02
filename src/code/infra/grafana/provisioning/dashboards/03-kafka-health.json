@@ -87,7 +87,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "timeSeries",
                     "rawSql": "SELECT toStartOfMinute(timestamp) as time, concat(topic_name, ' [', toString(partition), ']') as partition_label, consumer_lag FROM telemetry.kafka_metrics WHERE timestamp >= now() - INTERVAL 4 HOUR ORDER BY time ASC",
                     "refId": "A"
                 }
@@ -141,7 +141,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "table",
                     "rawSql": "SELECT topic_name, partition, consumer_lag, latest_offset, committed_offset, messages_per_sec FROM telemetry.kafka_metrics WHERE timestamp >= now() - INTERVAL 5 MINUTE ORDER BY consumer_lag DESC LIMIT 20",
                     "refId": "A"
                 }
@@ -217,7 +217,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "timeSeries",
                     "rawSql": "SELECT toStartOfMinute(timestamp) as time, topic_name, sum(messages_per_sec) as throughput_mps FROM telemetry.kafka_metrics WHERE timestamp >= now() - INTERVAL 2 HOUR GROUP BY time, topic_name ORDER BY time ASC",
                     "refId": "A"
                 }

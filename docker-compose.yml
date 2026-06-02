@@ -19,10 +19,18 @@ services:
       KAFKA_LOG_RETENTION_BYTES: 536870912
       KAFKA_LOG_RETENTION_HOURS: 24
       KAFKA_LOG_SEGMENT_BYTES: 104857600
+      KAFKA_HEAP_OPTS: "-Xmx384m -Xms128m"
+      KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: 1
+      KAFKA_TRANSACTION_STATE_LOG_NUM_PARTITIONS: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_CLEANER_THREADS: 1
+      KAFKA_NUM_NETWORK_THREADS: 2
+      KAFKA_NUM_IO_THREADS: 2
+      KAFKA_BACKGROUND_THREADS: 2
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 1G
     volumes:
       - kafka_kraft:/var/lib/kafka/data
     healthcheck:
@@ -36,11 +44,33 @@ services:
       retries: 5
       start_period: 30s
 
+  init-kafka:
+    image: confluentinc/cp-kafka:8.1.0
+    container_name: init-kafka
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: [ "sh", "-c" ]
+    command: |
+      sh -c "
+      echo 'Waiting for Kafka to respond...'
+      until kafka-topics --bootstrap-server kafka:9092 --list > /dev/null 2>&1; do
+        sleep 1
+      done
+      echo 'Pre-creating Kafka topics...'
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic stock_table --partitions 1 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic news_sentiment --partitions 1 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic stock_calculation_table --partitions 1 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic alert --partitions 1 --replication-factor 1
+      echo 'All required Kafka topics successfully created!'
+      "
+
   clickhouse:
     image: clickhouse/clickhouse-server:latest
     container_name: clickhouse
     environment:
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-password}
+      - TZ=UTC
     ports:
       - "8123:8123"
       - "9000:9000"
@@ -52,17 +82,18 @@ services:
       - clickhouse_data:/var/lib/clickhouse
       - ./src/code/infra/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
-      test: [ "CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1" ]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      test: [ "CMD-SHELL", "wget --spider -q http://localhost:8123/ping || exit 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 45s
 
   clickhouse_monitoring:
     image: clickhouse/clickhouse-server:latest
     container_name: clickhouse_monitoring
     environment:
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-password}
+      - TZ=UTC
     ports:
       - "8124:8123"
       - "9001:9000"
@@ -74,11 +105,11 @@ services:
       - clickhouse_monitoring_data:/var/lib/clickhouse
       - ./src/code/infra/monitoring_schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
-      test: [ "CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1" ]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      test: [ "CMD-SHELL", "wget --spider -q http://localhost:8123/ping || exit 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 45s
 
   stock_service:
     build:
@@ -87,6 +118,8 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
     environment:
       - KAFKA_BROKER=kafka:9092
       - REPLAY_SPEEDUP=5.0
@@ -107,6 +140,8 @@ services:
         condition: service_healthy
       clickhouse:
         condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
     environment:
       - KAFKA_BROKER=kafka:9092
       - CLICKHOUSE_URL=http://default:password@clickhouse:8123
@@ -128,6 +163,8 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
     environment:
       - KAFKA_BROKER=kafka:9092
       - USE_DUMMY_FIREBASE=true
@@ -148,6 +185,8 @@ services:
         condition: service_healthy
       clickhouse:
         condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
     environment:
       - KAFKA_BROKER=kafka:9092
       - CLICKHOUSE_HOST=clickhouse
@@ -168,6 +207,10 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
+      news_service:
+        condition: service_started
     environment:
       - KAFKA_BROKER=kafka:9092
     deploy:
@@ -188,6 +231,8 @@ services:
         condition: service_healthy
       clickhouse_monitoring:
         condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
     environment:
       - KAFKA_BROKER=kafka:9092
     volumes:
@@ -201,7 +246,7 @@ services:
       - sh
       - -c
       - |
-        /usr/share/grafana/bin/grafana-cli plugins install grafana-clickhouse-datasource
+        /usr/share/grafana/bin/grafana cli plugins install grafana-clickhouse-datasource
         exec /run.sh
     ports:
       - "3000:3000"
@@ -221,6 +266,12 @@ services:
       - grafana_data:/var/lib/grafana
       - ./src/code/infra/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
       - ./src/code/infra/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -s -f http://localhost:3000/api/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
     restart: on-failure
 
 volumes:

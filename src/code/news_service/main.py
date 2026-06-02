@@ -546,6 +546,7 @@ class NewsIngestionService:
             logger.info("Starting main ingestion loop")
             while True:
                 cycle += 1
+                self.hash_set = set()  # Clear duplicates tracker for each cycle
 
                 # Get current date range
                 start_date, end_date = self.ch.get_latest_timestamp()

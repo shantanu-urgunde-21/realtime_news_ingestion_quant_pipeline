@@ -51,6 +51,7 @@ class TelemetryClient:
         # Tracking connection state to suppress redundant logging alerts on failure
         self.server_online = True
         self.last_warning_time = 0
+        self.last_reconnect_time = 0
         
         # Start background worker thread
         self.worker_thread = threading.Thread(target=self._worker, daemon=True)
@@ -233,7 +234,10 @@ class TelemetryClient:
                     records.clear()
                     if not self.server_online:
                         self.server_online = True
-                        print(f"[TelemetryClient Info] Reconnected successfully to telemetry server: {self.url}")
+                        current_time = time.time()
+                        if current_time - self.last_reconnect_time > 60:
+                            print(f"[TelemetryClient Info] Reconnected successfully to telemetry server: {self.url}")
+                            self.last_reconnect_time = current_time
                 else:
                     self._handle_flush_failure(
                         f"HTTP {response.status_code} - {response.text[:150]}"

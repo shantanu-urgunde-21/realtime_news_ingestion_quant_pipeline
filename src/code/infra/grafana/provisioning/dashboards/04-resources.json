@@ -89,7 +89,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "timeSeries",
                     "rawSql": "SELECT toStartOfMinute(timestamp) as time, service_name, avg(cpu_utilization_pct) as avg_cpu FROM telemetry.system_metrics WHERE timestamp >= now() - INTERVAL 2 HOUR GROUP BY time, service_name ORDER BY time ASC",
                     "refId": "A"
                 }
@@ -166,7 +166,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "timeSeries",
                     "rawSql": "SELECT toStartOfMinute(timestamp) as time, service_name, max(memory_used_mb) as peak_mem FROM telemetry.system_metrics WHERE timestamp >= now() - INTERVAL 2 HOUR GROUP BY time, service_name ORDER BY time ASC",
                     "refId": "A"
                 }
@@ -211,7 +211,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "table",
                     "rawSql": "SELECT service_name, max(cpu_utilization_pct) as peak_cpu_pct, avg(cpu_utilization_pct) as avg_cpu_pct, max(memory_used_mb) as peak_mem_mb, max(memory_total_mb) as total_mem_mb, max(disk_used_gb) as disk_used_gb, max(network_rx_bytes) as network_rx_bytes, max(network_tx_bytes) as network_tx_bytes FROM telemetry.system_metrics WHERE timestamp >= now() - INTERVAL 1 HOUR GROUP BY service_name",
                     "refId": "A"
                 }
@@ -287,7 +287,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "timeSeries",
                     "rawSql": "SELECT toStartOfMinute(timestamp) as time, service_name, ((network_rx_bytes + network_tx_bytes) / 60 / 1024) as io_kbps FROM telemetry.system_metrics WHERE timestamp >= now() - INTERVAL 2 HOUR ORDER BY time ASC",
                     "refId": "A"
                 }

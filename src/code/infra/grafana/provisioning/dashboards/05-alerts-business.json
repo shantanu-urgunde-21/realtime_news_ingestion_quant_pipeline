@@ -56,7 +56,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "table",
                     "rawSql": "SELECT count() as total_alerts FROM telemetry.alerts_log WHERE timestamp >= now() - INTERVAL 1 HOUR",
                     "refId": "A"
                 }
@@ -118,7 +118,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "table",
                     "rawSql": "SELECT avg(prediction_confidence) as avg_confidence FROM telemetry.alerts_log WHERE timestamp >= now() - INTERVAL 1 HOUR",
                     "refId": "A"
                 }
@@ -172,7 +172,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "table",
                     "rawSql": "SELECT countDistinct(symbol) as unique_symbols FROM telemetry.alerts_log WHERE timestamp >= now() - INTERVAL 1 HOUR",
                     "refId": "A"
                 }
@@ -245,7 +245,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "timeSeries",
                     "rawSql": "SELECT toStartOfHour(timestamp) as hour, count() as alert_count FROM telemetry.alerts_log WHERE timestamp >= now() - INTERVAL 24 HOUR GROUP BY hour ORDER BY hour ASC",
                     "refId": "A"
                 }
@@ -322,7 +322,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "timeSeries",
                     "rawSql": "SELECT toStartOfMinute(timestamp) as time, avg(predicted_change_pct) as avg_prediction FROM telemetry.alerts_log WHERE timestamp >= now() - INTERVAL 6 HOUR GROUP BY time ORDER BY time ASC",
                     "refId": "A"
                 }
@@ -367,7 +367,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "table",
                     "rawSql": "SELECT symbol, count() as alert_count, avg(predicted_change_pct) as avg_change, min(prediction_confidence) as min_confidence, max(prediction_confidence) as max_confidence, avg(sentiment_score) as avg_sentiment FROM telemetry.alerts_log WHERE timestamp >= now() - INTERVAL 24 HOUR GROUP BY symbol ORDER BY alert_count DESC LIMIT 15",
                     "refId": "A"
                 }

@@ -79,7 +79,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "timeSeries",
                     "rawSql": "SELECT toStartOfMinute(timestamp) as time, concat(service_name, ' - ', metric_name) as label, quantile(0.5)(latency_ms) as p50, quantile(0.95)(latency_ms) as p95, quantile(0.99)(latency_ms) as p99 FROM telemetry.pipeline_latencies WHERE timestamp >= now() - INTERVAL 6 HOUR GROUP BY time, service_name, metric_name ORDER BY time ASC",
                     "refId": "A"
                 }
@@ -133,7 +133,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "table",
                     "rawSql": "SELECT service_name, metric_name, max(latency_ms) as max_latency_ms, quantile(0.95)(latency_ms) as p95_ms, quantile(0.5)(latency_ms) as p50_ms, count() as samples FROM telemetry.pipeline_latencies WHERE timestamp >= now() - INTERVAL 1 HOUR GROUP BY service_name, metric_name ORDER BY max_latency_ms DESC",
                     "refId": "A"
                 }
@@ -206,7 +206,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "timeSeries",
                     "rawSql": "SELECT toStartOfMinute(timestamp) as time, metric_name, count() as event_count FROM telemetry.pipeline_latencies WHERE timestamp >= now() - INTERVAL 2 HOUR GROUP BY time, metric_name ORDER BY time ASC",
                     "refId": "A"
                 }

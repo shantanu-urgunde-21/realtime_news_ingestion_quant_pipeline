@@ -50,7 +50,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "timeSeries",
                     "rawSql": "SELECT toStartOfMinute(timestamp) as time, service_name, count() as events FROM telemetry.pipeline_latencies WHERE timestamp >= now() - INTERVAL 1 HOUR GROUP BY service_name, time ORDER BY time DESC LIMIT 1",
                     "refId": "A"
                 }
@@ -112,7 +112,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "table",
                     "rawSql": "SELECT service_name, quantile(0.95)(latency_ms) as p95_ms FROM telemetry.pipeline_latencies WHERE timestamp >= now() - INTERVAL 5 MINUTE GROUP BY service_name",
                     "refId": "A"
                 }
@@ -189,7 +189,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "timeSeries",
                     "rawSql": "SELECT toStartOfMinute(timestamp) as time, metric_name, quantile(0.95)(latency_ms) as p95 FROM telemetry.pipeline_latencies WHERE timestamp >= now() - INTERVAL 2 HOUR GROUP BY time, metric_name ORDER BY time ASC",
                     "refId": "A"
                 }
@@ -251,7 +251,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "table",
                     "rawSql": "SELECT topic_name, sum(consumer_lag) as total_lag FROM telemetry.kafka_metrics WHERE timestamp >= now() - INTERVAL 5 MINUTE GROUP BY topic_name",
                     "refId": "A"
                 }
@@ -327,7 +327,7 @@
             "pluginVersion": "9.0.0",
             "targets": [
                 {
-                    "format": "time_series",
+                    "format": "timeSeries",
                     "rawSql": "SELECT toStartOfMinute(timestamp) as time, service_name, avg(memory_used_mb) as mem_mb FROM telemetry.system_metrics WHERE timestamp >= now() - INTERVAL 2 HOUR GROUP BY time, service_name ORDER BY time ASC",
                     "refId": "A"
                 }
