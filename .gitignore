@@ -1,4 +1,18 @@
 /docs/
+
+# Understand Anything Files
+/.understand-anything/
+/UnderstandAnything_README.md
+/ls.txt
+/run_phase2.js
+/run_phase4_5.js
+/run_phase6_7.js
+/ua-setup.js
+/node_modules/
+/pnpm-lock.yaml
+/pnpm-workspace.yaml
+/package.json
+
 **/__pycache__/
 __pycache__
 venv/
