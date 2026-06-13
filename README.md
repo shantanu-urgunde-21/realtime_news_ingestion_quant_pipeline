@@ -176,6 +176,59 @@ flowchart TD
   Topic_Stock & Topic_Sentiment & Topic_Calculation & Topic_Timestamp & Topic_Alert -.->|3. Kafka stats & lags| ClickHouse_Monitor
 ```
 
+### End-to-End Data Path
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Stock as Stock Service
+    participant News as News Service
+    participant Kafka as Kafka Topics (Broker)
+    participant Pathway as Calc Service (Pathway)
+    participant ClickHouse as ClickHouse DB (8123)
+    participant ML as Decision Engine (XGBoost)
+    participant Backend as Backend Service
+    participant FCM as Firebase (FCM)
+    participant Telemetry as ClickHouse Telemetry (8124)
+
+    Note over Stock,News: Ingestion Starts
+    Stock->>Kafka: Publish raw ticks to `stock_table`
+    Pathway->>Pathway: Fetch `stock_table` stream
+    Pathway->>Kafka: Publish sync timestamps to `stock_timestamp`
+    Kafka->>News: Sync News scraping intervals
+    News->>News: Fetch news headlines & sentiment from Alpha Vantage (Simulated)
+    News->>Kafka: Publish sentiment to `news_sentiment`
+    News->>ClickHouse: HTTP Insert into `sentiment_stream`
+
+    Note over Pathway: Stateful Joins & Calculations
+    Pathway->>Pathway: Stateful In-Memory asof_join
+    Pathway->>Pathway: Compute RSI, MACD, Volatility
+    Pathway->>Kafka: Publish joined analytics payload to `stock_calculation`
+
+    Note over ClickHouse,ML: Stream Consumption
+    Kafka->>ClickHouse: Ingest via `kafka_input` table + Materialized View
+    Kafka->>ML: Consume joined ticks in XGBoost Inference Loop
+    ML->>ML: Evaluate Classifier & Regressor models
+    ML->>Kafka: Publish high-confidence predictions to `alert`
+
+    Note over Backend,FCM: Delivery Retry & DLQ Loop
+    Kafka->>Backend: Consume alert payload from `alert` / `alert_retry`
+    alt FCM Dispatch Success
+        Backend->>FCM: Push FCM Notification
+        FCM->>Mobile Devices: Deliver Push Notification
+    else FCM Dispatch Fail (Count < 3)
+        Backend->>Kafka: Re-route to `alert_retry` (retry_count++)
+    else FCM Dispatch Fail (Count >= 3)
+        Backend->>Kafka: Route to `alert_dlq` (Quarantine)
+    end
+
+    Note over Telemetry: Continuous Monitoring
+    loop Telemetry Streams
+        Stock & News & Pathway & ML & Backend->>Telemetry: Write latency, cpu/memory, and central logs
+        Kafka-.->Telemetry: Query Lag & throughput stats via JMX/Prometheus exporter
+    end
+```
+
 ---
 
 ## 🔍 Deep Dive: Calculation Service

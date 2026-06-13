@@ -240,16 +240,14 @@ sequenceDiagram
     ML->>Kafka: Publish high-confidence predictions to `alert`
 
     Note over Backend,FCM: Delivery Retry & DLQ Loop
-    rect rgb(240, 240, 240)
-        Kafka->>Backend: Consume alert payload from `alert` / `alert_retry`
-        alt FCM Dispatch Success
-            Backend->>FCM: Push FCM Notification
-            FCM->>Mobile Devices: Deliver Push Notification
-        else FCM Dispatch Fail (Count < 3)
-            Backend->>Kafka: Re-route to `alert_retry` (retry_count++)
-        else FCM Dispatch Fail (Count >= 3)
-            Backend->>Kafka: Route to `alert_dlq` (Quarantine)
-        end
+    Kafka->>Backend: Consume alert payload from `alert` / `alert_retry`
+    alt FCM Dispatch Success
+        Backend->>FCM: Push FCM Notification
+        FCM->>Mobile Devices: Deliver Push Notification
+    else FCM Dispatch Fail (Count < 3)
+        Backend->>Kafka: Re-route to `alert_retry` (retry_count++)
+    else FCM Dispatch Fail (Count >= 3)
+        Backend->>Kafka: Route to `alert_dlq` (Quarantine)
     end
 
     Note over Telemetry: Continuous Monitoring
