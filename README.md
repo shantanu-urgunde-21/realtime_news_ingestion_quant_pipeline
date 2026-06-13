@@ -43,15 +43,15 @@ The entire pipeline is containerized and orchestrated via Docker Compose.
 ```mermaid
 flowchart TD
   %% Style Definitions
-  classDef stock fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1
-  classDef news fill:#ffedd5,stroke:#ea580c,stroke-width:2px,color:#c2410c
-  classDef calc fill:#f3e8ff,stroke:#8b5cf6,stroke-width:2px,color:#6d28d9
-  classDef decision fill:#e0e7ff,stroke:#4f46e5,stroke-width:2px,color:#4338ca
-  classDef backend fill:#ffe4e6,stroke:#f43f5e,stroke-width:2px,color:#be123c
-  classDef kafka fill:#dcfce7,stroke:#22c55e,stroke-width:2px,color:#15803d
-  classDef db fill:#fae8ff,stroke:#d946ef,stroke-width:2px,color:#a21caf
-  classDef telemetry fill:#f1f5f9,stroke:#64748b,stroke-width:2px,color:#475569
-  classDef external fill:#fef08a,stroke:#ca8a04,stroke-width:2px,color:#854d0e
+  classDef stock fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1,font-size:16px
+  classDef news fill:#ffedd5,stroke:#ea580c,stroke-width:2px,color:#c2410c,font-size:16px
+  classDef calc fill:#f3e8ff,stroke:#8b5cf6,stroke-width:2px,color:#6d28d9,font-size:16px
+  classDef decision fill:#e0e7ff,stroke:#4f46e5,stroke-width:2px,color:#4338ca,font-size:16px
+  classDef backend fill:#ffe4e6,stroke:#f43f5e,stroke-width:2px,color:#be123c,font-size:16px
+  classDef kafka fill:#dcfce7,stroke:#22c55e,stroke-width:2px,color:#15803d,font-size:16px,font-weight:bold
+  classDef db fill:#fae8ff,stroke:#d946ef,stroke-width:2px,color:#a21caf,font-size:16px,font-weight:bold
+  classDef telemetry fill:#f1f5f9,stroke:#64748b,stroke-width:2px,color:#475569,font-size:15px
+  classDef external fill:#fef08a,stroke:#ca8a04,stroke-width:2px,color:#854d0e,font-size:16px
 
   %% TIER 1: SOURCES & INGESTION MICROSERVICES
   subgraph Ingestion_Tier ["Tier 1: Ingestion Tier"]
