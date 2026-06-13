@@ -88,15 +88,10 @@ flowchart TD
 
   %% TIER 4: CALCULATION & SYNC TOPICS
   subgraph Calculation_Topics ["Tier 4: Calculation & Sync Topics"]
-    Topic_Calculation["Kafka Topic: stock_calculation<br/>(Joined Analytics payload)"]:::kafka
-    Topic_Timestamp["Kafka Topic: stock_timestamp<br/>(E2E Sync timestamps)"]:::kafka
+    Topic_Calculation["Kafka Topic: stock_calculation_table<br/>(Joined Analytics payload)"]:::kafka
   end
 
   PathwayEngine -->|Publish joined records| Topic_Calculation
-  PathwayEngine -->|Publish sync timestamps| Topic_Timestamp
-
-  %% Feedback loop for news fetch synchronization
-  Topic_Timestamp -.->|Feedback control loop: sync scraping| NewsService
 
   %% TIER 5: ANALYTICAL DATABASE & DECISION ENGINE
   subgraph ClickHouse_Store ["ClickHouse OLAP Database (Port 8123)"]
@@ -123,6 +118,7 @@ flowchart TD
   Topic_Calculation -->|Natively consume| Table_KafkaInput
   Topic_Calculation -->|Inference stream subscription| DecisionService
   NewsService -->|Active HTTP bulk inserts| Table_Sentiment
+  NewsService -.->|Direct HTTP Query: Sync date range| Table_Final
 
   %% TIER 6: ALERT ROUTING & ERROR HANDLING (DLQ)
   subgraph Alert_Routing ["Tier 5: Alert Routing & Resilience"]
@@ -155,25 +151,26 @@ flowchart TD
   FirebaseSDK -->|Dispatch notification| FCM
   FCM -->|Push alert| Mobile
 
-  %% OBSERVABILITY & TELEMETRY CLUSTER (Isolated on port 8124)
-  subgraph Observability_Cluster ["Observability & Telemetry Cluster (Port 8124)"]
-    ClickHouse_Monitor["ClickHouse Monitoring Database"]:::telemetry
+  %% OBSERVABILITY & TELEMETRY CLUSTER (Isolated on port 8124 / 3000)
+  subgraph Observability_Cluster ["Observability & Telemetry Cluster"]
+    system_daemon["System Daemon (psutil)<br/>[Runs inside all containers]"]:::telemetry
+    kafka_monitor["Kafka Lag Monitor (kafka_monitor.py)<br/>[Standalone container]"]:::telemetry
+    ClickHouse_Monitor["ClickHouse Monitoring Database (Port 8124)"]:::telemetry
     Table_Latencies["Table: telemetry.pipeline_latencies<br/>(E2E delays, Compute delay)"]:::telemetry
     Table_Metrics["Table: telemetry.system_metrics<br/>(CPU, RAM, Disk, Net I/O)"]:::telemetry
     Table_KafkaMetrics["Table: telemetry.kafka_metrics<br/>(Consumer lag, throughput)"]:::telemetry
     Table_Logs["Table: telemetry.service_logs<br/>(Central error/exception sink)"]:::telemetry
+    Grafana["Grafana Server (Port 3000)"]:::telemetry
 
+    system_daemon -->|Insert CPU/RAM/Disk/Net stats| Table_Metrics
+    system_daemon -->|Direct warning/error logs| Table_Logs
+    kafka_monitor -->|Query broker partition lag| Table_KafkaMetrics
     ClickHouse_Monitor -->|Store latency metrics| Table_Latencies
     ClickHouse_Monitor -->|Store sys resource logs| Table_Metrics
     ClickHouse_Monitor -->|Store lag stats| Table_KafkaMetrics
     ClickHouse_Monitor -->|Store central service logs| Table_Logs
+    Grafana -->|Query dashboard metrics| ClickHouse_Monitor
   end
-
-  %% Telemetry streams
-  AllServices["All Microservices (Stock, News, Calc, Decision, Backend)"]:::telemetry
-  AllServices -->|1. Latencies & Sys metrics| ClickHouse_Monitor
-  AllServices -->|2. Direct Error/Warning logging| ClickHouse_Monitor
-  Topic_Stock & Topic_Sentiment & Topic_Calculation & Topic_Timestamp & Topic_Alert -.->|3. Kafka stats & lags| ClickHouse_Monitor
 ```
 
 ### End-to-End Data Path
@@ -190,12 +187,13 @@ sequenceDiagram
     participant Backend as Backend Service
     participant FCM as Firebase (FCM)
     participant Telemetry as ClickHouse Telemetry (8124)
+    participant Grafana as Grafana Dashboard (3000)
 
     Note over Stock,News: Ingestion Starts
+    News->>ClickHouse: HTTP GET Query: Select MAX(timestamp) from final_table
+    ClickHouse-->>News: Return latest date range boundary
     Stock->>Kafka: Publish raw ticks to `stock_table`
     Pathway->>Pathway: Fetch `stock_table` stream
-    Pathway->>Kafka: Publish sync timestamps to `stock_timestamp`
-    Kafka->>News: Sync News scraping intervals
     News->>News: Fetch news headlines & sentiment from Alpha Vantage (Simulated)
     News->>Kafka: Publish sentiment to `news_sentiment`
     News->>ClickHouse: HTTP Insert into `sentiment_stream`
@@ -203,7 +201,7 @@ sequenceDiagram
     Note over Pathway: Stateful Joins & Calculations
     Pathway->>Pathway: Stateful In-Memory asof_join
     Pathway->>Pathway: Compute RSI, MACD, Volatility
-    Pathway->>Kafka: Publish joined analytics payload to `stock_calculation`
+    Pathway->>Kafka: Publish joined analytics payload to `stock_calculation_table`
 
     Note over ClickHouse,ML: Stream Consumption
     Kafka->>ClickHouse: Ingest via `kafka_input` table + Materialized View
@@ -222,10 +220,15 @@ sequenceDiagram
         Backend->>Kafka: Route to `alert_dlq` (Quarantine)
     end
 
-    Note over Telemetry: Continuous Monitoring
-    loop Telemetry Streams
-        Stock & News & Pathway & ML & Backend->>Telemetry: Write latency, cpu/memory, and central logs
-        Kafka-.->Telemetry: Query Lag & throughput stats via JMX/Prometheus exporter
+    Note over Telemetry,Grafana: Continuous Monitoring
+    loop Telemetry & Monitoring Streams
+        Stock & News & Pathway & ML & Backend->>Telemetry: system_daemon writes CPU/RAM/Disk/Net stats & latencies
+        Stock & News & Pathway & ML & Backend->>Telemetry: ClickHouseLogHandler writes warning/error logs to telemetry.service_logs
+        Telemetry->>Kafka: kafka_monitor queries partition offsets
+        Kafka-->>Telemetry: Return partition logs and lag metrics
+        Telemetry->>Telemetry: Store processed metrics in system_metrics, service_logs, kafka_metrics
+        Grafana->>Telemetry: Query metrics on port 8124
+        Grafana->>Grafana: Render dashboards to administrator on port 3000
     end
 ```
 
@@ -285,8 +288,47 @@ If you have new data in ClickHouse and want to update the XGBoost models:
 
 ---
 
-## 📜 Logs & Monitoring
-Each service logs its activity to the shared `logs` directory. You can query centralized metrics inside the telemetry instance:
+## 📊 Telemetry, Monitoring & Grafana
+
+Sentinel-Stream features a dedicated telemetry and monitoring cluster (isolated on port `8124` for ClickHouse and `3000` for Grafana) to track pipeline execution without impacting core performance.
+
+### Telemetry Database Tables (ClickHouse Monitoring)
+You can directly query raw metrics stored in ClickHouse using the client:
 ```bash
-docker-compose exec clickhouse_monitoring clickhouse-client -q "SELECT * FROM telemetry.pipeline_latencies LIMIT 10"
+docker-compose exec clickhouse_monitoring clickhouse-client -d telemetry -q "SHOW TABLES"
 ```
+The database contains:
+*   `telemetry.pipeline_latencies`: End-to-end latency, computation delay, and inference/delivery delay metrics.
+*   `telemetry.system_metrics`: CPU, RAM, Disk, and Network RX/TX statistics.
+*   `telemetry.kafka_metrics`: Consumer lag, high-water marks, and processing velocity.
+*   `telemetry.service_logs`: Aggregated Warning/Error logs across all microservices.
+
+### Grafana Dashboards
+Grafana is pre-configured with a ClickHouse datasource and dashboards.
+1. Open your browser and navigate to **`http://localhost:3000`**.
+2. Log in with the default credentials:
+   * **Username:** `admin`
+   * **Password:** `admin`
+3. Explore the following dashboards:
+   * **01-Overview:** Global pipeline checkup and active status indicators.
+   * **02-Latency Detail:** End-to-end event latencies and bottleneck analysis.
+   * **03-Kafka Health:** Consumer lag tracking, throughput rates, and queue sizes.
+   * **04-Resources:** CPU and RAM usage profiles across all containers.
+   * **05-Alerts & Business Metrics:** Signal volumes, FCM dispatch retry/fail rates, and DLQ quarantine.
+
+---
+
+## 🧪 Integration & Performance Benchmarking
+
+A complete benchmarking suite is provided to test the system under load, verify dead-letter queue routing via failure injection, and generate performance reports.
+
+To run the benchmarking suite:
+1. Trigger the benchmark script in the container:
+   ```bash
+   docker-compose exec kafka_monitor python /app/infra/run_benchmark.py
+   ```
+2. The benchmark will:
+   * Inject a telemetry failure payload (`FAIL`) to verify that the Backend Service retries alerts up to 3 times and correctly routes persistent failures to `alert_dlq`.
+   * Stream a high-speed burst of stock quotes to measure throughput and processing velocity.
+   * Query the ClickHouse database to verify database persistence and print out system statistics.
+   * Auto-generate a detailed markdown verification report in **`docs/monitoring_verification_report.md`**.

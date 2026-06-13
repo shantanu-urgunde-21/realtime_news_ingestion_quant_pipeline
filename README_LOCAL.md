@@ -206,11 +206,47 @@ During the first 30 minutes of real-world time (before the first 150-minute simu
 
 ---
 
-## 6. Verification Checklist
-1. **FCM Alerts:** The backend logs should start logging `✓ Alert sent for [SYMBOL]: mock-msg-...` whenever the Decision Service detects an absolute price calculation change of `> 2%` with high confidence.
-2. **Lag Tracking:** Run the lag monitor and query the database logs in ClickHouse to verify metrics are ingested successfully:
+## 6. Verification, Telemetry & Grafana
+
+To verify that the system is fully operational and healthy, follow these steps:
+
+### A. Run the Automated Benchmarking Suite
+A validation script `run_benchmark.py` is included to inject synthetic data, verify DLQ routing, stress-test the ingestion velocity, and compile a report.
+1. Run the benchmark suite inside the lag monitor container:
    ```bash
-   # Connect to ClickHouse client inside Docker
-   docker exec -it clickhouse_monitoring clickhouse-client --query "SELECT * FROM telemetry.kafka_metrics LIMIT 10"
+   docker compose exec kafka_monitor python /app/infra/run_benchmark.py
    ```
-3. **No Auth Errors:** Centralized log flushes in the microservices logs will output `[TelemetryClient Info] Reconnected successfully...` on startup and will run silently, suppressing redundant alerts or exceptions.
+   *(If running outside Docker, ensure your virtual environment is active, execute `export PYTHONPATH=$(pwd)/src/code` and run: `python3 src/code/infra/run_benchmark.py`)*
+2. Verify that the script outputs:
+   * **DLQ Verification Success:** Catching mock FCM failures and routing them after 3 attempts to `alert_dlq`.
+   * **High-Speed Stress Ingestion:** Successful burst of 3,000 stock ticks.
+   * **Database Audit:** Confirmed telemetry counts inside ClickHouse tables.
+3. Open and check the compiled markdown report generated at **`docs/monitoring_verification_report.md`**.
+
+### B. Access Grafana Dashboards
+Grafana is pre-configured with a ClickHouse datasource connecting to port `8124` (ClickHouse Monitoring).
+1. Open your browser and navigate to **`http://localhost:3000`**.
+2. Log in using default credentials:
+   * **Username:** `admin`
+   * **Password:** `admin`
+3. Open **Dashboards** from the left navigation pane and explore the pre-loaded monitoring templates:
+   * `01-Overview` (Pipeline Status)
+   * `02-Latency Detail` (E2E Process Delays)
+   * `03-Kafka Health` (Partition Lag & Msg/sec velocity)
+   * `04-Resources` (CPU/RAM Utilization via system daemon)
+   * `05-Alerts & Business Metrics` (FCM Alerts, Retries & DLQ)
+
+### C. Command-Line Telemetry Checks
+You can manually check raw telemetry records inside ClickHouse Monitoring via the SQL client:
+* **Check Kafka partition consumer lags:**
+  ```bash
+  docker exec -it clickhouse_monitoring clickhouse-client -q "SELECT topic_name, consumer_group, sum(consumer_lag) FROM telemetry.kafka_metrics GROUP BY topic_name, consumer_group"
+  ```
+* **Verify System Metrics collection:**
+  ```bash
+  docker exec -it clickhouse_monitoring clickhouse-client -q "SELECT service_name, avg(cpu_utilization_pct), avg(memory_used_mb) FROM telemetry.system_metrics GROUP BY service_name"
+  ```
+* **Review Service Log warnings/errors:**
+  ```bash
+  docker exec -it clickhouse_monitoring clickhouse-client -q "SELECT log_level, count() FROM telemetry.service_logs GROUP BY log_level"
+  ```
