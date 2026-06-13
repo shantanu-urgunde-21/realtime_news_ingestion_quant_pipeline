@@ -25,7 +25,7 @@ echo "127.0.0.1 kafka clickhouse clickhouse_monitoring" | sudo tee -a /etc/hosts
 A fully featured control utility `run_local.sh` is provided in the project root to manage the entire lifecycle of the hybrid stack.
 
 ### 🚀 Start the Entire Pipeline
-This command maps files, boots up Docker database/broker instances, waits until they pass native health checks, and launches all 5 microservices in the correct logical dependency order:
+This command maps files, boots up Docker database/broker instances, waits until they pass native health checks, and launches all 5 microservices plus the lag monitor in the correct logical dependency order:
 ```bash
 ./run_local.sh start
 ```
@@ -37,7 +37,7 @@ Displays all active background microservices and reports Docker container states
 ```
 
 ### 📋 Stream Real-Time Application Logs
-Tail the logs of any microservice in real-time. Available log services are: `backend`, `decision_service`, `calc_service`, `news_service`, and `stock_service`.
+Tail the logs of any microservice in real-time. Available log services are: `backend`, `decision_service`, `calc_service`, `news_service`, `stock_service`, and `kafka_monitor`.
 ```bash
 # Example: Tailing the Decision Service (XGBoost ML) logs
 ./run_local.sh logs decision_service
@@ -119,6 +119,13 @@ cd src/code/stock_service
 KAFKA_BROKER=kafka:9092 REPLAY_SPEEDUP=5.0 python3 main.py
 ```
 
+#### **Terminal 6: Consumer Group Lag Monitor Daemon (Telemetry)**
+```bash
+export PYTHONPATH="/home/shantanu/programming/realtime_news_ingestion_quant_pipeline/src/code"
+cd src/code/infra
+KAFKA_BROKER=kafka:9092 python3 kafka_monitor.py
+```
+
 ---
 
 ## 4. Troubleshooting & Operational Gotchas
@@ -195,9 +202,15 @@ During the first 30 minutes of real-world time (before the first 150-minute simu
    * These default values are joined with quotes and streamed immediately to `stock_calculation_table` to prevent blocking the pipeline.
 4. **Decision Service (XGBoost):** Actively consumes these partially-enriched calculation messages. It executes inference successfully using the default baseline parameters (`1e-3` / `0.0`) so the system remains alive and operational.
 5. **Backend Service (Firebase Mock):** Stands ready, listening to `alert` messages to print alerts if predictions exceed the trigger thresholds (even during warm-up).
+6. **Lag Monitor:** Continues logging broker and consumer group offset performance metrics into the ClickHouse tracking database.
 
 ---
 
 ## 6. Verification Checklist
 1. **FCM Alerts:** The backend logs should start logging `✓ Alert sent for [SYMBOL]: mock-msg-...` whenever the Decision Service detects an absolute price calculation change of `> 2%` with high confidence.
-2. **No Auth Errors:** Centralized logs or application outputs in the news service and stock service will run cleanly without database connection or credential failures.
+2. **Lag Tracking:** Run the lag monitor and query the database logs in ClickHouse to verify metrics are ingested successfully:
+   ```bash
+   # Connect to ClickHouse client inside Docker
+   docker exec -it clickhouse_monitoring clickhouse-client --query "SELECT * FROM telemetry.kafka_metrics LIMIT 10"
+   ```
+3. **No Auth Errors:** Centralized log flushes in the microservices logs will output `[TelemetryClient Info] Reconnected successfully...` on startup and will run silently, suppressing redundant alerts or exceptions.

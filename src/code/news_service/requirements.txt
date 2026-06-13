@@ -1,3 +1,4 @@
 kafka-python
 requests
 python-dotenv
+psutil

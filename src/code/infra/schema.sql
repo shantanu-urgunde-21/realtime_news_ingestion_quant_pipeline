@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS kafka_input (
     news_title String
 )
 ENGINE = Kafka
-SETTINGS kafka_broker_list = 'kafka:9092',        -- Use docker service name in production
+SETTINGS kafka_broker_list = 'kafka:9092',
          kafka_topic_list = 'stock_calculation_table',
          kafka_group_name = 'clickhouse_group',
          kafka_format = 'JSONEachRow',

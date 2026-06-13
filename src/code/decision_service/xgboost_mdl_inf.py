@@ -39,6 +39,25 @@ logging.basicConfig(
 logger = logging.getLogger(MICROSERVICE_NAME)
 logger.info("Starting Decision Service - Real-time inference pipeline")
 
+# Initialize Observability Telemetry
+from infra.telemetry_client import TelemetryClient, ClickHouseLogHandler
+telemetry = TelemetryClient()
+
+# Set up ClickHouse Centralized Log Harvesting (Warning/Error/Fatal)
+ch_handler = ClickHouseLogHandler(service_name=MICROSERVICE_NAME)
+ch_handler.setFormatter(logging.Formatter(fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+logging.getLogger().addHandler(ch_handler)
+logger.info("Centralized ClickHouse logging telemetry registered successfully")
+
+# Start Container System Resource Telemetry Daemon
+try:
+    from infra.system_daemon import start_system_daemon
+    start_system_daemon(MICROSERVICE_NAME)
+    logger.info("System Resource Telemetry Daemon started successfully")
+except Exception as e:
+    logger.warning(f"Failed to start System Resource Telemetry Daemon: {e}")
+
+
 # ============================================================================
 # Model Loading
 # ============================================================================
@@ -163,6 +182,18 @@ try:
             logger.warning("Received message with empty symbol, skipping")
             continue
 
+        # Measure Ingestion & Indicator Computation latency
+        birth_time_ms = float(data.get("ts_ms", 0.0))
+        if birth_time_ms > 0:
+            ingestion_delay = (time.time() * 1000) - birth_time_ms
+            telemetry.log_latency(
+                service_name=MICROSERVICE_NAME,
+                symbol=current_symbol,
+                metric_name="ingestion_delay",
+                latency_ms=ingestion_delay,
+                cycle=0
+            )
+
         # Encode symbol to integer code (as used during training)
         symbol_encoded = symbol_to_code.get(current_symbol, -1)
 
@@ -214,6 +245,8 @@ try:
         # ====================================================================
         # Model Predictions
         # ====================================================================
+        inference_start = time.time()
+        
         # Predict percentage change (regression)
         try:
             y_pred_pct = model_pct.predict(features)
@@ -234,6 +267,26 @@ try:
             logger.error(f"Probability prediction failed for {current_symbol}: {str(e)}", exc_info=True)
             continue
 
+        inference_end = time.time()
+        inference_delay = (inference_end - inference_start) * 1000
+        telemetry.log_latency(
+            service_name=MICROSERVICE_NAME,
+            symbol=current_symbol,
+            metric_name="ml_inference_delay",
+            latency_ms=inference_delay,
+            cycle=0
+        )
+        
+        if birth_time_ms > 0:
+            e2e_delay = (inference_end * 1000) - birth_time_ms
+            telemetry.log_latency(
+                service_name=MICROSERVICE_NAME,
+                symbol=current_symbol,
+                metric_name="ml_e2e_delay",
+                latency_ms=e2e_delay,
+                cycle=0
+            )
+
         # ====================================================================
         # Alert Generation
         # ====================================================================
@@ -242,6 +295,9 @@ try:
         alert_threshold_prob = 0.5
         
         if (abs(predicted_change) > alert_threshold_pct) and (big_move_prob > alert_threshold_prob):
+            import uuid
+            alert_id = str(uuid.uuid4())
+            
             record = {
                 "symbol": current_symbol,
                 "Predicted_change": float(predicted_change),
@@ -256,10 +312,25 @@ try:
             try:
                 producer.send("alert", value=record)
                 producer.flush()
+                
+                # Log alert to telemetry for business metrics
+                telemetry.log_alert(
+                    symbol=current_symbol,
+                    predicted_change_pct=float(predicted_change),
+                    prediction_confidence=float(big_move_prob),
+                    sentiment_score=float(weighted_sentiment),
+                    rsi_signal=int(data.get("rsi_timing", 0)),
+                    model_name="xgb_pct_change_classifier",
+                    ml_inference_latency_ms=float(inference_delay),
+                    triggered_by="price_and_confidence_threshold",
+                    alert_id=alert_id
+                )
+                
                 logger.info(
                     f"Alert sent for {current_symbol}: "
                     f"predicted_change={predicted_change:.4f}%, "
-                    f"big_move_prob={big_move_prob:.4f}"
+                    f"big_move_prob={big_move_prob:.4f}, "
+                    f"alert_id={alert_id}"
                 )
                 print(f"Alert sent for {current_symbol}")
             except Exception as e:

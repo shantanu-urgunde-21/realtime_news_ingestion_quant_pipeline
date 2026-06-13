@@ -31,7 +31,7 @@ check_hosts() {
 
 start_infra() {
     echo "🐳 Starting backing databases and Kafka brokers..."
-    docker compose up -d kafka clickhouse clickhouse_monitoring
+    docker compose up -d kafka clickhouse clickhouse_monitoring grafana init-kafka
     
     echo "⏳ Waiting for ClickHouse & Kafka to pass health checks..."
     while true; do
@@ -86,6 +86,11 @@ start_services() {
     echo -e " \033[0;32m[RUNNING]\033[0m (Log: src/code/logs/stock_service.log)"
     sleep 2
 
+    # 6. Kafka Monitor Daemon
+    echo -n "   -> Launching Kafka Consumer Lag Monitor..."
+    (cd "${SCRIPT_DIR}/src/code/infra" && KAFKA_BROKER=kafka:9092 "$PYTHON_EXEC" kafka_monitor.py > "${LOG_DIR}/kafka_monitor.log" 2>&1) &
+    echo -e " \033[0;32m[RUNNING]\033[0m (Log: src/code/logs/kafka_monitor.log)"
+
     echo -e "\n🎉 \033[0;32mEntire Quantitative News Ingestion Pipeline started successfully!\033[0m"
 }
 
@@ -115,7 +120,7 @@ print_status() {
 tail_logs() {
     local target="$1"
     if [ -z "$target" ]; then
-        echo "Usage: $0 logs [backend|decision_service|calc_service|news_service|stock_service]"
+        echo "Usage: $0 logs [backend|decision_service|calc_service|news_service|stock_service|kafka_monitor]"
         exit 1
     fi
     local log_file="${LOG_DIR}/${target}.log"
@@ -191,7 +196,7 @@ case "$1" in
         ;;
     *)
         echo "Usage: $0 {start|stop|status|logs [service_name]|telemetry [query_type]}"
-        echo "   Logs services: backend, decision_service, calc_service, news_service, stock_service"
+        echo "   Logs services: backend, decision_service, calc_service, news_service, stock_service, kafka_monitor"
         echo "   Telemetry types: latencies, lag, resources, errors, interactive"
         exit 1
         ;;
