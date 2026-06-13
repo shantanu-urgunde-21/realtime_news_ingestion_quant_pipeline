@@ -40,15 +40,141 @@ The entire pipeline is containerized and orchestrated via Docker Compose.
 
 ## 🏗️ System Architecture & Data Flow
 
-The system consists of 7 core microservices working in a reactive event-driven stream:
+```mermaid
+flowchart TD
+  %% Style Definitions
+  classDef stock fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1
+  classDef news fill:#ffedd5,stroke:#ea580c,stroke-width:2px,color:#c2410c
+  classDef calc fill:#f3e8ff,stroke:#8b5cf6,stroke-width:2px,color:#6d28d9
+  classDef decision fill:#e0e7ff,stroke:#4f46e5,stroke-width:2px,color:#4338ca
+  classDef backend fill:#ffe4e6,stroke:#f43f5e,stroke-width:2px,color:#be123c
+  classDef kafka fill:#dcfce7,stroke:#22c55e,stroke-width:2px,color:#15803d
+  classDef db fill:#fae8ff,stroke:#d946ef,stroke-width:2px,color:#a21caf
+  classDef telemetry fill:#f1f5f9,stroke:#64748b,stroke-width:2px,color:#475569
+  classDef external fill:#fef08a,stroke:#ca8a04,stroke-width:2px,color:#854d0e
 
-1.  **Stock Service**: Replays historical stock data from a local CSV feed into the `stock_table` Kafka topic (simulation speed is dynamically configurable via the `REPLAY_SPEEDUP` variable).
-2.  **News Service**: Fetches global news sentiment and publishes aggregated news sentiment records directly to the `news_sentiment` Kafka topic at high-frequency.
-3.  **Calc Service (Pathway)**: Performs real-time windowed volatility and indicator forecasting (GARCH/ARMA, RSI, MACD). Resolves stateful **temporal `asof_join`** operations in-memory.
-4.  **ClickHouse (OLAP Storage)**: Pipes raw calculations into analytical tables natively via Materialized Views (`mv_kafka_to_final`).
-5.  **Decision Service (XGBoost)**: Reads pre-joined technical indicators and news sentiments directly from the Kafka stream to execute immediate dual-model inferences.
-6.  **Backend (Alerts)**: Listens for high-confidence predictions on the `alert` Kafka topic and dispatches push notifications.
-7.  **ClickHouse Telemetry (`clickhouse_monitoring`)**: A dedicated database instance for centralized telemetry logging.
+  %% TIER 1: SOURCES & INGESTION MICROSERVICES
+  subgraph Ingestion_Tier ["Tier 1: Ingestion Tier"]
+    CSV[("merged_stock_popular_red.csv")]:::stock
+    StockService["Stock Service (main.py)"]:::stock
+    NewsService["News Service (main.py)"]:::news
+    AlphaVantage[["Alpha Vantage API (Simulated)"]]:::external
+
+    CSV -->|Replay minute OHLC at 5x| StockService
+    AlphaVantage -.->|Fetch headlines & sentiment| NewsService
+  end
+
+  %% TIER 2: INGESTION QUEUES (KAFKA)
+  subgraph Ingestion_Queues ["Tier 2: Ingestion Topics"]
+    Topic_Stock["Kafka Topic: stock_table<br/>(Raw Ticks)"]:::kafka
+    Topic_Sentiment["Kafka Topic: news_sentiment<br/>(AV Sentiment Ticks)"]:::kafka
+  end
+
+  StockService -->|Publish raw ticks| Topic_Stock
+  NewsService -->|Publish sentiments| Topic_Sentiment
+
+  %% TIER 3: STREAM PROCESSING & JOINS
+  subgraph Processing_Tier ["Tier 3: Stream Processing & Joins"]
+    PathwayEngine["Pathway Stream Engine (main.py)"]:::calc
+    Indicators["indicators.py (RSI, MACD, EMA, GARCH)"]:::calc
+    Schemas["schemas.py (Quote/News schemas)"]:::calc
+    
+    PathwayEngine <-->|Compute indicators| Indicators
+    PathwayEngine -->|Enforce schemas| Schemas
+  end
+
+  Topic_Stock -->|Consume price ticks| PathwayEngine
+  Topic_Sentiment -->|Consume news sentiments| PathwayEngine
+
+  %% TIER 4: CALCULATION & SYNC TOPICS
+  subgraph Calculation_Topics ["Tier 4: Calculation & Sync Topics"]
+    Topic_Calculation["Kafka Topic: stock_calculation<br/>(Joined Analytics payload)"]:::kafka
+    Topic_Timestamp["Kafka Topic: stock_timestamp<br/>(E2E Sync timestamps)"]:::kafka
+  end
+
+  PathwayEngine -->|Publish joined records| Topic_Calculation
+  PathwayEngine -->|Publish sync timestamps| Topic_Timestamp
+
+  %% Feedback loop for news fetch synchronization
+  Topic_Timestamp -.->|Feedback control loop: sync scraping| NewsService
+
+  %% TIER 5: ANALYTICAL DATABASE & DECISION ENGINE
+  subgraph ClickHouse_Store ["ClickHouse OLAP Database (Port 8123)"]
+    Table_KafkaInput["Table: kafka_input<br/>(Kafka Engine)"]:::db
+    MV_Kafka["Materialized View:<br/>mv_kafka_to_final"]:::db
+    Table_Final["Table: final_table<br/>(Historical Analytics Store)"]:::db
+    Table_Sentiment["Table: sentiment_stream<br/>(HTTP raw sentiments)"]:::db
+    
+    Table_KafkaInput -->|Natively trigger MV| MV_Kafka
+    MV_Kafka -->|Persist final records| Table_Final
+  end
+
+  subgraph Decision_Engine ["XGBoost Decision Engine (decision_service)"]
+    DecisionService["Decision Service (xgboost_mdl_inf.py)"]:::decision
+    ClassifierModel["xgb_classifier_model.json"]:::decision
+    RegressorModel["xgb_pct_change_model.json"]:::decision
+    SymbolPickle["symbol_mapping.pkl"]:::decision
+    
+    DecisionService -->|Evaluate classification| ClassifierModel
+    DecisionService -->|Predict price change| RegressorModel
+    DecisionService -->|Align ticker categorical mappings| SymbolPickle
+  end
+
+  Topic_Calculation -->|Natively consume| Table_KafkaInput
+  Topic_Calculation -->|Inference stream subscription| DecisionService
+  NewsService -->|Active HTTP bulk inserts| Table_Sentiment
+
+  %% TIER 6: ALERT ROUTING & ERROR HANDLING (DLQ)
+  subgraph Alert_Routing ["Tier 5: Alert Routing & Resilience"]
+    Topic_Alert["Kafka Topic: alert<br/>(Trigger main notification)"]:::kafka
+    Topic_AlertRetry["Kafka Topic: alert_retry<br/>(Exponential retry queue)"]:::kafka
+    Topic_AlertDLQ["Kafka Topic: alert_dlq<br/>(Dead Letter Queue / Quarantine)"]:::kafka
+  end
+
+  DecisionService -->|Publish signals if price change > 2%| Topic_Alert
+
+  %% TIER 7: DELIVERY SERVICE
+  subgraph Delivery_Tier ["Tier 6: Delivery Tier"]
+    BackendService["Backend Service (main.py)"]:::backend
+    SendMessage["send_message.py"]:::backend
+    FirebaseSDK["Firebase Admin SDK (firebase-admin-key.json)"]:::backend
+    
+    BackendService -->|Invoke FCM send| SendMessage
+    SendMessage -->|Authenticate| FirebaseSDK
+  end
+
+  Topic_Alert -->|Consume fresh alerts| BackendService
+  Topic_AlertRetry -->|Consume retries| BackendService
+  BackendService -->|Push back if retry_count < 3| Topic_AlertRetry
+  BackendService -->|Quarantine if retry_count >= 3| Topic_AlertDLQ
+
+  %% External Entities
+  FCM[["Firebase Cloud Messaging (FCM)"]]:::external
+  Mobile[["Mobile Devices / Users"]]:::external
+
+  FirebaseSDK -->|Dispatch notification| FCM
+  FCM -->|Push alert| Mobile
+
+  %% OBSERVABILITY & TELEMETRY CLUSTER (Isolated on port 8124)
+  subgraph Observability_Cluster ["Observability & Telemetry Cluster (Port 8124)"]
+    ClickHouse_Monitor["ClickHouse Monitoring Database"]:::telemetry
+    Table_Latencies["Table: telemetry.pipeline_latencies<br/>(E2E delays, Compute delay)"]:::telemetry
+    Table_Metrics["Table: telemetry.system_metrics<br/>(CPU, RAM, Disk, Net I/O)"]:::telemetry
+    Table_KafkaMetrics["Table: telemetry.kafka_metrics<br/>(Consumer lag, throughput)"]:::telemetry
+    Table_Logs["Table: telemetry.service_logs<br/>(Central error/exception sink)"]:::telemetry
+
+    ClickHouse_Monitor -->|Store latency metrics| Table_Latencies
+    ClickHouse_Monitor -->|Store sys resource logs| Table_Metrics
+    ClickHouse_Monitor -->|Store lag stats| Table_KafkaMetrics
+    ClickHouse_Monitor -->|Store central service logs| Table_Logs
+  end
+
+  %% Telemetry streams
+  AllServices["All Microservices (Stock, News, Calc, Decision, Backend)"]:::telemetry
+  AllServices -->|1. Latencies & Sys metrics| ClickHouse_Monitor
+  AllServices -->|2. Direct Error/Warning logging| ClickHouse_Monitor
+  Topic_Stock & Topic_Sentiment & Topic_Calculation & Topic_Timestamp & Topic_Alert -.->|3. Kafka stats & lags| ClickHouse_Monitor
+```
 
 ---
 
